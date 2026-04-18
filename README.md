@@ -23,9 +23,29 @@
 
 ---
 
+## ![WHY NOW](https://img.shields.io/badge/🚨-WHY_NOW-FF0000?style=for-the-badge&labelColor=000000)
+
+**ClawHavoc. Early 2026.**
+
+539 malicious skills uploaded to ClawHub — the official marketplace for the OpenClaw agent framework. Nearly **19% of popular agent skills compromised**. Attackers poisoned the ecosystem with skills that harvested credentials, exfiltrated memory files (`SOUL.md`, `MEMORY.md`), opened reverse shells, and modified agent behavior while appearing completely normal.
+
+No attestation. No receipt. No way to tell a legitimate execution from a compromised one.
+
+> *"The trust problem isn't coming. It already failed publicly. SkillMint exists because unverified execution is a structural vulnerability — not a one-off bug. We're building the verification layer before the next ClawHavoc happens at 10x scale."*
+
+| ClawHavoc Attack Vector | SkillMint Defense |
+|---|---|
+| Malicious skills masquerading as legitimate | TEE attests exact skill hash — impersonation impossible |
+| Memory poisoning (SOUL.md / MEMORY.md theft) | Prompts encrypted on 0G Storage, never exposed to anyone |
+| No proof of what actually ran | On-chain receipt proves model + prompt + output, forever |
+| 19% of skills compromised, undetected | Every execution independently verifiable by anyone |
+| Supply-chain attack via open marketplace | NFT ownership + encrypted prompt = tamper-proof provenance |
+
+---
+
 ## ![THE PROBLEM](https://img.shields.io/badge/⚡-THE_PROBLEM-0038FF?style=for-the-badge&labelColor=000000)
 
-AI models are **black boxes**. When an agent calls an AI and gets back a result, there's no proof of *which* model ran, *what prompt* it was given, or whether the output was tampered with. In agentic systems where money moves on every hop, this is broken.
+AI models are **black boxes**. When an agent calls an AI and gets back a result, there's no proof of *which* model ran, *what prompt* it was given, or whether the output was tampered with. In agentic systems where money moves on every hop, this is structurally broken.
 
 ## ![THE FIX](https://img.shields.io/badge/✨-THE_FIX-D4FF00?style=for-the-badge&labelColor=000000)
 
@@ -48,7 +68,7 @@ AI models are **black boxes**. When an agent calls an AI and gets back a result,
 
 ## ![WHY TEE](https://img.shields.io/badge/🔐-WHY_TEE-0038FF?style=for-the-badge&labelColor=000000)
 
-A **TEE** is a hardware-isolated enclave (Intel SGX / AMD SEV) on 0G Compute nodes. Code runs inside a locked glass box — nobody, not even the server operator, can peek in or modify what's happening. The TEE signs a **cryptographic attestation** proving the exact model + prompt + output, giving agents trustless provenance.
+A **TEE** is a hardware-isolated enclave (Intel SGX / AMD SEV) on 0G Compute nodes. Code runs inside a locked glass box — nobody, not even the server operator, can peek in or modify what's happening. The TEE signs a **cryptographic attestation** proving the exact model + prompt + output, giving agents trustless provenance. No ClawHavoc-style memory poisoning. No tampered outputs. No silent compromise.
 
 ## ![WHY NFT](https://img.shields.io/badge/🛡-WHY_NFT-D4FF00?style=for-the-badge&labelColor=000000)
 
