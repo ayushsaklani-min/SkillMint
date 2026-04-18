@@ -1,0 +1,16 @@
+[
+  "function requestExecution(uint256 skillId, bytes32 inputHash) payable returns (bytes32)",
+  "function confirmExecution(bytes32 executionId, bytes32 receiptHash)",
+  "function refund(bytes32 executionId)",
+  "function withdrawPayments(address payable payee)",
+  "function payments(address dest) view returns (uint256)",
+  "function getExecution(bytes32 executionId) view returns (tuple(bytes32 executionId, uint256 skillId, address agent, bytes32 inputHash, uint256 amount, address payeeAtFunding, uint256 createdAt, bool settled, bool refunded))",
+  "function TIMEOUT() view returns (uint256)",
+  "function TREASURY_BPS() view returns (uint16)",
+  "function registry() view returns (address)",
+  "function treasury() view returns (address)",
+  "function oracle() view returns (address)",
+  "event ExecutionRequested(bytes32 indexed executionId, uint256 indexed skillId, address indexed agent, bytes32 inputHash, uint256 amount)",
+  "event ExecutionConfirmed(bytes32 indexed executionId, bytes32 receiptHash, address payee, uint256 payeeAmount, uint256 treasuryAmount)",
+  "event ExecutionRefunded(bytes32 indexed executionId, address indexed agent, uint256 amount)"
+]

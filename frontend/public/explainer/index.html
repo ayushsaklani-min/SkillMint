@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>SkillMint — Scroll Story</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    html, body { margin: 0; padding: 0; background: #1A3CFF; }
+    * { box-sizing: border-box; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* The scroll-track: one "page" of scroll per scene */
+    #scroll-track {
+      position: relative;
+      width: 100%;
+    }
+    /* The sticky stage pins to the viewport while the track scrolls */
+    #sticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+    }
+    #stage-wrap {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #canvas {
+      position: relative;
+      flex-shrink: 0;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      background: #1A3CFF;
+    }
+    /* Scroll progress bar pinned to top */
+    #scroll-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: rgba(0,0,0,0.25);
+      z-index: 100;
+    }
+    #scroll-bar > div {
+      height: 100%;
+      background: #D6FF3D;
+      width: 0%;
+      transition: width 80ms linear;
+    }
+    /* Scroll hint */
+    #scroll-hint {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: #D6FF3D;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
+      letter-spacing: 0.25em;
+      padding: 10px 20px;
+      border-radius: 999px;
+      border: 2px solid #D6FF3D;
+      z-index: 90;
+      pointer-events: none;
+      transition: opacity 300ms;
+    }
+    #scroll-hint.hidden { opacity: 0; }
+    #scroll-hint .arrow {
+      display: inline-block;
+      animation: bob 1.2s ease-in-out infinite;
+    }
+    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+
+    /* Intro logo — lives inside the scaled canvas so it sits on the blue */
+    #intro-logo {
+      position: absolute;
+      top: 40px; left: 40px;
+      width: 180px; height: 180px;
+      z-index: 15;
+      pointer-events: none;
+      transition: opacity 300ms;
+      filter: drop-shadow(10px 10px 0 #000);
+    }
+    #intro-logo img { width: 100%; height: 100%; object-fit: contain; }
+    #intro-logo.hidden { opacity: 0; }
+
+    /* Scene-dot nav on the right */
+    #dots {
+      position: fixed;
+      right: 20px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 95;
+    }
+    #dots button {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: rgba(0,0,0,0.25);
+      border: 2px solid #000;
+      cursor: pointer;
+      padding: 0;
+      transition: all 150ms;
+    }
+    #dots button.active {
+      background: #D6FF3D;
+      transform: scale(1.3);
+    }
+    #dots button:hover { background: #D6FF3D; }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="scroll-bar"><div id="scroll-fill"></div></div>
+
+  <!-- Tall scroll track. Height is set via JS to (scenes × 100vh). -->
+  <div id="scroll-track">
+    <div id="sticky">
+      <div id="stage-wrap">
+        <div id="canvas">
+          <div id="root"></div>
+          <div id="intro-logo">
+            <img src="/logo.png.png" alt="SkillMint"/>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="scroll-hint">
+    SCROLL TO BEGIN <span class="arrow">↓</span>
+  </div>
+
+  <div id="dots"></div>
+
+  <script type="text/babel" src="animations.jsx"></script>
+  <script type="text/babel" src="scenes.jsx"></script>
+  <script type="text/babel">
+    // Scene timing in "units" — each unit = 1 viewport of scroll.
+    // Tune per scene for pacing (shorter = faster through that scene).
+    const TIMELINE = [
+      { label: '01 Problem',  units: 1.3, C: SceneHook    },
+      { label: '02 Brand',    units: 1.1, C: SceneLogo    },
+      { label: '03 Publish',  units: 2.4, C: ScenePublish },
+      { label: '04 Explore',  units: 1.6, C: SceneExplore },
+      { label: '05 Execute',  units: 1.8, C: SceneExecute },
+      { label: '06 Verify',   units: 1.8, C: SceneVerify  },
+      { label: '07 Outro',    units: 1.3, C: SceneOutro   },
+    ];
+
+    // Convert units → seconds used by scenes. Scenes assume ~3–5s of localTime.
+    const UNIT_SECONDS = 3.2;
+    let cum = 0;
+    const SCENES = TIMELINE.map(s => {
+      const start = cum;
+      cum += s.units * UNIT_SECONDS;
+      return { ...s, start, end: cum };
+    });
+    const TOTAL = cum;
+
+    // ── Custom scroll-driven timeline context ─────────────────────────────
+    function ScrollStage({ width, height, children }) {
+      const [time, setTime] = React.useState(0);
+      const [scale, setScale] = React.useState(1);
+      const [active, setActive] = React.useState(0);
+
+      React.useEffect(() => {
+        // Set scroll-track height = sum of scene units × 100vh
+        const totalUnits = TIMELINE.reduce((a, s) => a + s.units, 0);
+        // +1 for a final rest page so the last scene can hold
+        const track = document.getElementById('scroll-track');
+        track.style.height = `${(totalUnits + 0.2) * 100}vh`;
+      }, []);
+
+      React.useEffect(() => {
+        // Scale canvas to fit viewport
+        const canvas = document.getElementById('canvas');
+        const measure = () => {
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const s = Math.min(vw / width, vh / height);
+          canvas.style.width = width + 'px';
+          canvas.style.height = height + 'px';
+          canvas.style.transform = `scale(${s})`;
+          canvas.style.transformOrigin = 'center';
+          setScale(s);
+        };
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+      }, [width, height]);
+
+      React.useEffect(() => {
+        let raf = null;
+        let targetTime = 0;
+        let currentTime = 0;
+
+        const onScroll = () => {
+          const doc = document.documentElement;
+          const scrollable = doc.scrollHeight - window.innerHeight;
+          const progress = scrollable > 0 ? window.scrollY / scrollable : 0;
+          targetTime = Math.max(0, Math.min(TOTAL, progress * TOTAL));
+
+          // Toggle scroll hint + intro logo
+          const hint = document.getElementById('scroll-hint');
+          if (hint) hint.classList.toggle('hidden', window.scrollY > 80);
+          const logo = document.getElementById('intro-logo');
+          if (logo) logo.classList.toggle('hidden', window.scrollY > 80);
+
+          // Fill top progress
+          const fill = document.getElementById('scroll-fill');
+          if (fill) fill.style.width = (progress * 100) + '%';
+
+          // Active scene
+          const idx = SCENES.findIndex(s => targetTime >= s.start && targetTime < s.end);
+          setActive(idx === -1 ? SCENES.length - 1 : idx);
+
+          if (!raf) raf = requestAnimationFrame(tick);
+        };
+
+        const tick = () => {
+          // Smooth lerp toward scroll target (gives a tiny bit of inertia)
+          const diff = targetTime - currentTime;
+          if (Math.abs(diff) < 0.001) {
+            currentTime = targetTime;
+            setTime(currentTime);
+            raf = null;
+            return;
+          }
+          currentTime += diff * 0.25;
+          setTime(currentTime);
+          raf = requestAnimationFrame(tick);
+        };
+
+        onScroll();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => {
+          window.removeEventListener('scroll', onScroll);
+          if (raf) cancelAnimationFrame(raf);
+        };
+      }, []);
+
+      const ctxValue = React.useMemo(
+        () => ({ time, duration: TOTAL, playing: false, setTime: () => {}, setPlaying: () => {} }),
+        [time]
+      );
+
+      return (
+        <TimelineContext.Provider value={ctxValue}>
+          {children}
+          <SceneLabel activeIdx={active}/>
+        </TimelineContext.Provider>
+      );
+    }
+
+    function SceneLabel({ activeIdx }) {
+      const scene = SCENES[activeIdx];
+      if (!scene) return null;
+      return (
+        <div style={{
+          position: 'absolute', top: 24, right: 28,
+          background: '#000', color: '#D6FF3D',
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: 14, letterSpacing: '0.2em', fontWeight: 700,
+          padding: '8px 16px', borderRadius: 999,
+          border: '2px solid #D6FF3D',
+          zIndex: 20,
+        }}>
+          ● {scene.label.toUpperCase()}
+        </div>
+      );
+    }
+
+    // Map global `time` to per-scene local time by wrapping each scene in a
+    // Sprite with its [start,end] window. The existing scenes already read
+    // useSprite().localTime, so they just work.
+    function App() {
+      return (
+        <ScrollStage width={1920} height={1080}>
+          {SCENES.map(({ start, end, C }, i) => (
+            <Sprite key={i} start={start} end={end} keepMounted={false}>
+              <C/>
+            </Sprite>
+          ))}
+        </ScrollStage>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+    // Build right-side dot nav
+    (function buildDots() {
+      const dots = document.getElementById('dots');
+      const totalUnits = TIMELINE.reduce((a, s) => a + s.units, 0);
+      let cum = 0;
+      SCENES.forEach((s, i) => {
+        const center = cum + (s.units / 2);
+        cum += s.units;
+        const frac = center / totalUnits;
+        const btn = document.createElement('button');
+        btn.title = s.label;
+        btn.dataset.idx = i;
+        btn.addEventListener('click', () => {
+          const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+          window.scrollTo({ top: frac * scrollable, behavior: 'smooth' });
+        });
+        dots.appendChild(btn);
+      });
+      // Highlight active
+      const update = () => {
+        const doc = document.documentElement;
+        const scrollable = doc.scrollHeight - window.innerHeight;
+        const progress = scrollable > 0 ? window.scrollY / scrollable : 0;
+        const t = progress * TOTAL;
+        const idx = SCENES.findIndex(s => t >= s.start && t < s.end);
+        const active = idx === -1 ? SCENES.length - 1 : idx;
+        [...dots.children].forEach((el, i) => el.classList.toggle('active', i === active));
+      };
+      window.addEventListener('scroll', update, { passive: true });
+      update();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-archivo-black), "Arial Black", "Helvetica Neue", Impact, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-3xl: 2.5rem;
+  --radius-4xl: 3rem;
+
+  /* ═══ BRAND PALETTE ═══ */
+  --color-brand-blue: #0038FF;
+  --color-brand-blue-dark: #0026B3;
+  --color-brand-lime: #D4FF00;
+  --color-brand-lime-dark: #B8E000;
+  --color-brand-black: #000000;
+  --color-brand-white: #FFFFFF;
+  --color-brand-ink: #0A0A0A;
+  --color-brand-paper: #FAFAFA;
+}
+
+:root {
+  --background: #0038FF;
+  --foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
+  --popover: #FFFFFF;
+  --popover-foreground: #000000;
+  --primary: #D4FF00;
+  --primary-foreground: #000000;
+  --secondary: #FFFFFF;
+  --secondary-foreground: #000000;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: rgba(255, 255, 255, 0.7);
+  --accent: #D4FF00;
+  --accent-foreground: #000000;
+  --destructive: #FF3333;
+  --border: #000000;
+  --input: #FFFFFF;
+  --ring: #D4FF00;
+  --chart-1: #0038FF;
+  --chart-2: #D4FF00;
+  --chart-3: #000000;
+  --chart-4: #FFFFFF;
+  --chart-5: #FF3366;
+  --radius: 1rem;
+  --sidebar: #0038FF;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #D4FF00;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #FFFFFF;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #000000;
+  --sidebar-ring: #D4FF00;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), Inter, system-ui, sans-serif;
+    font-weight: 500;
+  }
+  html {
+    font-family: var(--font-geist-sans), Inter, system-ui, sans-serif;
+  }
+
+  /* Brutalist display typography */
+  .font-display,
+  h1, h2, h3, .display {
+    font-family: var(--font-archivo-black), "Arial Black", "Helvetica Neue", Impact, sans-serif;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 0.92;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEO-BRUTALIST UTILITIES
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Signature hard shadow — the heart of neo-brutalism ── */
+.shadow-brutal {
+  box-shadow: 4px 4px 0 0 #000;
+}
+.shadow-brutal-sm {
+  box-shadow: 3px 3px 0 0 #000;
+}
+.shadow-brutal-lg {
+  box-shadow: 6px 6px 0 0 #000;
+}
+.shadow-brutal-xl {
+  box-shadow: 8px 8px 0 0 #000;
+}
+.shadow-brutal-lime {
+  box-shadow: 4px 4px 0 0 #D4FF00;
+}
+.shadow-brutal-blue {
+  box-shadow: 4px 4px 0 0 #0038FF;
+}
+
+/* Press animation — on hover/active, remove shadow + shift to feel tactile */
+.btn-brutal {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-brutal:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 #000;
+}
+.btn-brutal:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 0 #000;
+}
+
+/* ── Blueprint grid background (for blue sections) ── */
+.grid-bg-brutal {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.grid-bg-light {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+/* ── Chunky 3D layered text shadow — makes headings feel like billboards ── */
+.text-3d {
+  text-shadow:
+    2px 2px 0 rgba(0, 0, 0, 0.9),
+    4px 4px 0 rgba(0, 0, 0, 0.7),
+    6px 6px 0 rgba(0, 0, 0, 0.5),
+    8px 8px 0 rgba(0, 0, 0, 0.3);
+}
+.text-3d-lime {
+  text-shadow:
+    3px 3px 0 #000,
+    6px 6px 0 rgba(0, 0, 0, 0.6);
+}
+.text-3d-black {
+  text-shadow:
+    3px 3px 0 #D4FF00,
+    6px 6px 0 rgba(212, 255, 0, 0.5);
+}
+
+/* ── Glass card over blue (for floating elements over hero) ── */
+.glass-brutal {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 1.25rem;
+}
+
+/* ── Floating animation ── */
+@keyframes float-brutal {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-14px) rotate(-3deg); }
+}
+@keyframes float-brutal-alt {
+  0%, 100% { transform: translateY(0) rotate(4deg); }
+  50% { transform: translateY(-10px) rotate(4deg); }
+}
+.animate-float-1 { animation: float-brutal 6s ease-in-out infinite; }
+.animate-float-2 { animation: float-brutal-alt 7s ease-in-out infinite; }
+
+/* ── Rotating badge ── */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow { animation: spin-slow 12s linear infinite; }
+
+/* ── Pulse dot ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── Marquee (for live ticker) ── */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+/* ── Skeleton shimmer ── */
+.skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #0038FF;
+}
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border: 2px solid #0038FF;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #D4FF00;
+}
+
+/* ── Selection ── */
+::selection {
+  background: #D4FF00;
+  color: #000;
+}

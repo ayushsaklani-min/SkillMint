@@ -1,0 +1,42 @@
+{
+  "name": "@skillmint/sdk",
+  "version": "0.1.0",
+  "description": "SDK for agents to discover, execute, and manage AI skills on SkillMint (0G Chain)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "skillmint",
+    "0g",
+    "ai-skills",
+    "nft",
+    "agent",
+    "sdk",
+    "web3"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  },
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  }
+}

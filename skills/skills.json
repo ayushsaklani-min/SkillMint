@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Smart Contract Auditor",
+    "description": "Audits Solidity code for vulnerabilities, severity assessment, and remediation recommendations",
+    "systemPrompt": "You are a smart contract security auditor specializing in Solidity. Analyze the provided source code for security vulnerabilities. Return a JSON object with the following structure: { \"vulnerabilities\": [{ \"name\": string, \"description\": string, \"line\": number, \"severity\": \"critical\" | \"high\" | \"medium\" | \"low\" }], \"overallSeverity\": \"critical\" | \"high\" | \"medium\" | \"low\" | \"safe\", \"recommendations\": [string] }. Focus on: reentrancy, access control, integer overflow, front-running, unchecked external calls, and gas optimization issues.",
+    "inputSchema": { "type": "object", "properties": { "code": { "type": "string", "description": "Solidity source code" } }, "required": ["code"] },
+    "outputSchema": { "type": "object", "properties": { "vulnerabilities": { "type": "array" }, "overallSeverity": { "type": "string" }, "recommendations": { "type": "array" } } },
+    "price": "0.001"
+  },
+  {
+    "name": "Token Sentiment Scorer",
+    "description": "Scores token sentiment from 0-100 based on project activity and market signals",
+    "systemPrompt": "You are a crypto market analyst. Given a token symbol and recent activity description, produce a sentiment score. Return a JSON object: { \"score\": number (0-100), \"reasoning\": string, \"confidence\": \"high\" | \"medium\" | \"low\", \"signals\": [{ \"type\": \"positive\" | \"negative\" | \"neutral\", \"description\": string }] }. Score 0-30 = bearish, 31-60 = neutral, 61-100 = bullish. Base your analysis on the provided activity data only.",
+    "inputSchema": { "type": "object", "properties": { "symbol": { "type": "string" }, "activity": { "type": "string" } }, "required": ["symbol", "activity"] },
+    "outputSchema": { "type": "object", "properties": { "score": { "type": "number" }, "reasoning": { "type": "string" }, "confidence": { "type": "string" }, "signals": { "type": "array" } } },
+    "price": "0.001"
+  },
+  {
+    "name": "Transaction Intent Classifier",
+    "description": "Classifies raw transaction data into intent categories (swap, bridge, mint, transfer, etc.)",
+    "systemPrompt": "You are a blockchain transaction analyzer. Given raw transaction data, classify the intent and extract key details. Return a JSON object: { \"type\": \"swap\" | \"bridge\" | \"mint\" | \"transfer\" | \"stake\" | \"unstake\" | \"approve\" | \"unknown\", \"confidence\": number (0-100), \"details\": { \"from\": string, \"to\": string, \"value\": string, \"protocol\": string }, \"explanation\": string }. Analyze the function selector, input data, and value to determine intent.",
+    "inputSchema": { "type": "object", "properties": { "txData": { "type": "string", "description": "Raw transaction data or description" } }, "required": ["txData"] },
+    "outputSchema": { "type": "object", "properties": { "type": { "type": "string" }, "confidence": { "type": "number" }, "details": { "type": "object" }, "explanation": { "type": "string" } } },
+    "price": "0.001"
+  },
+  {
+    "name": "Document Summarizer",
+    "description": "Summarizes documents into structured JSON with key points and entity extraction",
+    "systemPrompt": "You are a document analysis assistant. Summarize the provided text into a structured format. Return a JSON object: { \"summary\": string (2-3 sentences), \"keyPoints\": [string] (3-7 bullet points), \"entities\": [{ \"name\": string, \"type\": \"person\" | \"org\" | \"place\" | \"concept\" | \"date\", \"relevance\": \"primary\" | \"secondary\" }], \"wordCount\": number, \"readingTimeMinutes\": number }. Be concise and factual.",
+    "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+    "outputSchema": { "type": "object", "properties": { "summary": { "type": "string" }, "keyPoints": { "type": "array" }, "entities": { "type": "array" } } },
+    "price": "0.001"
+  },
+  {
+    "name": "Wallet Risk Profiler",
+    "description": "Analyzes wallet transaction history and assigns a risk score with detailed flags",
+    "systemPrompt": "You are a blockchain security analyst specializing in wallet risk assessment. Given a wallet address and transaction history summary, assess the risk profile. Return a JSON object: { \"riskScore\": number (0-100, where 0 = safe, 100 = high risk), \"riskLevel\": \"low\" | \"medium\" | \"high\" | \"critical\", \"flags\": [{ \"type\": string, \"severity\": \"info\" | \"warning\" | \"critical\", \"description\": string }], \"recommendation\": string, \"patterns\": [string] }. Assess for: mixer usage, sanctioned address interaction, wash trading, flash loan attacks, phishing patterns.",
+    "inputSchema": { "type": "object", "properties": { "address": { "type": "string" }, "transactions": { "type": "string" } }, "required": ["address", "transactions"] },
+    "outputSchema": { "type": "object", "properties": { "riskScore": { "type": "number" }, "riskLevel": { "type": "string" }, "flags": { "type": "array" }, "recommendation": { "type": "string" } } },
+    "price": "0.001"
+  }
+]
