@@ -2,11 +2,11 @@
 
 <img src="frontend/public/logo.png.png" alt="SkillMint" width="200"/>
 
-# $\color{#0038FF}\textsf{SKILL}$$\color{#D4FF00}\textsf{MINT}$
+# ![SKILL](https://img.shields.io/badge/SKILL-0038FF?style=for-the-badge&labelColor=0038FF)![MINT](https://img.shields.io/badge/MINT-D4FF00?style=for-the-badge&labelColor=D4FF00)
 
-### $\color{#0038FF}\textsf{The Verified AI Skill Execution Protocol}$
+### The Verified AI Skill Execution Protocol
 
-*Every execution $\color{#D4FF00}\textsf{TEE-attested}$. Every payment $\color{#D4FF00}\textsf{automatic}$. Every result $\color{#D4FF00}\textsf{provable}$.*
+*Every execution **TEE-attested**. Every payment **automatic**. Every result **provable**.*
 
 <br/>
 
@@ -17,19 +17,19 @@
 
 <br/>
 
-**[▶ $\color{#0038FF}\textsf{Live App}$](https://frontend-mauve-eta-12.vercel.app)** · **[📖 $\color{#0038FF}\textsf{Explainer}$](https://frontend-mauve-eta-12.vercel.app/explainer)** · **[🔗 $\color{#0038FF}\textsf{0G ChainScan}$](https://chainscan-galileo.0g.ai)** · **[📂 $\color{#0038FF}\textsf{0G StorageScan}$](https://storagescan-galileo.0g.ai)**
+**[▶ Live App](https://frontend-mauve-eta-12.vercel.app)** · **[📖 Explainer](https://frontend-mauve-eta-12.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan-galileo.0g.ai)** · **[📂 0G StorageScan](https://storagescan-galileo.0g.ai)**
 
 </div>
 
 ---
 
-## $\color{#D4FF00}\textsf{⚡ THE PROBLEM}$
+## ![THE PROBLEM](https://img.shields.io/badge/⚡-THE_PROBLEM-0038FF?style=for-the-badge&labelColor=000000)
 
 AI models are **black boxes**. When an agent calls an AI and gets back a result, there's no proof of *which* model ran, *what prompt* it was given, or whether the output was tampered with. In agentic systems where money moves on every hop, this is broken.
 
-## $\color{#0038FF}\textsf{✨ THE FIX}$
+## ![THE FIX](https://img.shields.io/badge/✨-THE_FIX-D4FF00?style=for-the-badge&labelColor=000000)
 
-**SkillMint** turns AI system prompts into tradeable **$\color{#D4FF00}\textsf{ERC-721 NFTs}$**, then wraps every execution in a **$\color{#D4FF00}\textsf{Trusted Execution Environment}$** (TEE) on the 0G network. Every output ships with a hardware-signed receipt that's cryptographically impossible to fake.
+**SkillMint** turns AI system prompts into tradeable **ERC-721 NFTs**, then wraps every execution in a **Trusted Execution Environment** (TEE) on the 0G network. Every output ships with a hardware-signed receipt that's cryptographically impossible to fake.
 
 ```
 ┌──────────┐   pay OG    ┌──────────────┐   verified output    ┌──────────┐
@@ -39,22 +39,22 @@ AI models are **black boxes**. When an agent calls an AI and gets back a result,
                                 │
                     ┌───────────┴────────────┐
                     ▼                        ▼
-           ┌────────────────┐       ┌────────────────┐
-           │ 90% → NFT      │       │ Receipt →      │
-           │    OWNER       │       │   0G STORAGE   │
-           │ 10% → PROTOCOL │       │  (root on-chain) │
-           └────────────────┘       └────────────────┘
+           ┌────────────────┐       ┌──────────────────┐
+           │ 90% → NFT      │       │ Receipt →        │
+           │    OWNER       │       │   0G STORAGE     │
+           │ 10% → PROTOCOL │       │ (root on-chain)  │
+           └────────────────┘       └──────────────────┘
 ```
 
-## $\color{#D4FF00}\textsf{🔐 WHY TEE?}$
+## ![WHY TEE](https://img.shields.io/badge/🔐-WHY_TEE-0038FF?style=for-the-badge&labelColor=000000)
 
 A **TEE** is a hardware-isolated enclave (Intel SGX / AMD SEV) on 0G Compute nodes. Code runs inside a locked glass box — nobody, not even the server operator, can peek in or modify what's happening. The TEE signs a **cryptographic attestation** proving the exact model + prompt + output, giving agents trustless provenance.
 
-## $\color{#0038FF}\textsf{🛡 WHY NFT?}$
+## ![WHY NFT](https://img.shields.io/badge/🛡-WHY_NFT-D4FF00?style=for-the-badge&labelColor=000000)
 
 Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage. Buyers execute it but **never see the prompt** — they only see the output. Creators keep their IP secret while earning royalties forever. Transfer the NFT → revenue follows.
 
-## $\color{#D4FF00}\textsf{🧱 ARCHITECTURE}$
+## ![ARCHITECTURE](https://img.shields.io/badge/🧱-ARCHITECTURE-0038FF?style=for-the-badge&labelColor=000000)
 
 | Package            | What's Inside                                                          |
 |--------------------|------------------------------------------------------------------------|
@@ -66,7 +66,7 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 | **`shared/`**      | ABIs + network config (testnet ↔ mainnet)                              |
 | **`tee-sandbox/`** | Standalone TEE compute test harness                                    |
 
-## $\color{#0038FF}\textsf{🔁 EXECUTION FLOW}$
+## ![EXECUTION FLOW](https://img.shields.io/badge/🔁-EXECUTION_FLOW-D4FF00?style=for-the-badge&labelColor=000000)
 
 1. **Creator** publishes a skill → mints `SkillRegistryV2` NFT, prompt encrypted on 0G Storage
 2. **Agent** calls `SkillEscrow.requestExecution(skillId, input)` with OG payment
@@ -76,7 +76,7 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol
 7. **Anyone** can verify the receipt against the on-chain root — forever
 
-## $\color{#D4FF00}\textsf{🚀 QUICK START}$
+## ![QUICK START](https://img.shields.io/badge/🚀-QUICK_START-0038FF?style=for-the-badge&labelColor=000000)
 
 ```bash
 # Frontend — localhost:3000
@@ -92,7 +92,7 @@ cd contracts && npm install && npx hardhat test
 cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
 ```
 
-## $\color{#0038FF}\textsf{🌐 LIVE DEPLOYMENT}$
+## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
 | Component | Where |
 |-----------|-------|
@@ -102,19 +102,19 @@ cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
 | **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
 | **Network** | 0G Galileo Testnet · Chain ID `16602` |
 
-## $\color{#D4FF00}\textsf{🎨 DESIGN}$
+## ![DESIGN](https://img.shields.io/badge/🎨-DESIGN-0038FF?style=for-the-badge&labelColor=000000)
 
 Neo-brutalism. **Electric blue** `#0038FF` · **Acid lime** `#D4FF00` · **Parrot green** `#20C20E` · hard black 4px shadows · **Archivo Black** display type.
 
-## $\color{#0038FF}\textsf{📜 LICENSE}$
+## ![LICENSE](https://img.shields.io/badge/📜-LICENSE-D4FF00?style=for-the-badge&labelColor=000000)
 
 MIT — build freely.
 
 <div align="center">
 <br/>
 
-### $\color{#D4FF00}\textsf{Made for the 0G APAC Hackathon 2026}$ 🌏
+![Hackathon](https://img.shields.io/badge/MADE_FOR-0G_APAC_HACKATHON_2026-0038FF?style=for-the-badge&labelColor=D4FF00)
 
-<sub>$\color{#0038FF}\textsf{SKILLMINT PROTOCOL · VERIFIED AI SKILL EXECUTION}$</sub>
+<sub>**SKILLMINT PROTOCOL · VERIFIED AI SKILL EXECUTION**</sub>
 
 </div>
