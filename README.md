@@ -17,7 +17,7 @@
 
 <br/>
 
-**[▶ Live App](https://frontend-mauve-eta-12.vercel.app)** · **[📖 Explainer](https://frontend-mauve-eta-12.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan-galileo.0g.ai)** · **[📂 0G StorageScan](https://storagescan-galileo.0g.ai)**
+**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan-galileo.0g.ai)** · **[📂 0G StorageScan](https://storagescan-galileo.0g.ai)**
 
 </div>
 
@@ -96,7 +96,7 @@ cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
 
 | Component | Where |
 |-----------|-------|
-| **Frontend** | [`frontend-mauve-eta-12.vercel.app`](https://frontend-mauve-eta-12.vercel.app) · Vercel |
+| **Frontend** | [`skillmint-0g.vercel.app`](https://skillmint-0g.vercel.app) · Vercel |
 | **Oracle** | AWS EC2 · `ap-south-1` · systemd |
 | **SkillRegistryV2** | `0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4) |
 | **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
