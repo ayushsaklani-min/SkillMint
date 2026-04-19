@@ -58,9 +58,33 @@ export default function PublishPage() {
       const signer = await browserProvider.getSigner();
       const signerAddr = await signer.getAddress();
       const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
+
+      // Encrypt prompt via the oracle: the ciphertext goes to 0G Storage, the plaintext
+      // never touches on-chain metadata. Only the oracle (inside the TEE flow) can decrypt.
+      const encRes = await fetch("/api/oracle/encrypt-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt }),
+      });
+      if (!encRes.ok) {
+        const errText = await encRes.text().catch(() => "");
+        throw new Error(`Prompt encryption failed: ${encRes.status} ${errText}`);
+      }
+      const enc = await encRes.json();
+      if (!enc?.storageRoot || !enc?.iv) {
+        throw new Error("Oracle returned malformed encryption payload");
+      }
+
       const promptHash = ethers.keccak256(ethers.toUtf8Bytes(systemPrompt));
       const priceWei = ethers.parseEther(price);
-      const metadata = JSON.stringify({ name, description, systemPrompt });
+      const metadata = JSON.stringify({
+        name,
+        description,
+        storageRoot: enc.storageRoot,
+        iv: enc.iv,
+        algo: enc.algo,
+        keyId: enc.keyId,
+      });
       const tx = await registry.registerSkill(promptHash, computeProvider, model, priceWei, metadata);
       await tx.wait();
       const skillCount = await registry.skillCount();

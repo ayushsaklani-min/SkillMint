@@ -5,6 +5,9 @@ import { MemData, Indexer } from '@0gfoundation/0g-ts-sdk';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { startApi } from './api.js';
+import { decryptPrompt } from './crypto.js';
+import { waitForInput } from './store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +46,52 @@ async function initBroker() {
   console.log('[oracle] Broker ready.');
 }
 
+// ─── Prompt loading ────────────────────────────────────────────────────────────
+
+async function loadSystemPrompt({ skill, metadata, skillId }) {
+  let meta = {};
+  try { meta = JSON.parse(metadata); } catch {}
+
+  if (meta.storageRoot && meta.iv) {
+    console.log(`  Encrypted prompt detected — downloading ${meta.storageRoot}`);
+    const tempPath = path.join(__dirname, `../temp/enc-${skillId}-${Date.now()}.json`);
+    fs.mkdirSync(path.dirname(tempPath), { recursive: true });
+    try {
+      const err = await indexer.download(meta.storageRoot, tempPath, true);
+      if (err) throw new Error(`storage download: ${err}`);
+      const payload = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
+      return decryptPrompt({
+        ciphertext: payload.ciphertext,
+        iv: payload.iv || meta.iv,
+        algo: payload.algo || meta.algo,
+      });
+    } finally {
+      try { fs.unlinkSync(tempPath); } catch {}
+    }
+  }
+
+  if (skill.promptHash && skill.promptHash !== ethers.ZeroHash) {
+    try {
+      const tempPath = path.join(__dirname, `../temp/prompt-${skillId}.json`);
+      fs.mkdirSync(path.dirname(tempPath), { recursive: true });
+      const err = await indexer.download(skill.promptHash, tempPath, true);
+      if (err) throw new Error(`storage download: ${err}`);
+      const promptData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
+      fs.unlinkSync(tempPath);
+      if (promptData.systemPrompt) return promptData.systemPrompt;
+    } catch (storageErr) {
+      console.warn(`  [warn] Legacy storage fallback failed: ${storageErr.message}`);
+    }
+  }
+
+  if (meta.systemPrompt) {
+    console.warn(`  [warn] Using legacy plaintext systemPrompt from metadata`);
+    return meta.systemPrompt;
+  }
+
+  throw new Error('No retrievable system prompt for this skill');
+}
+
 // ─── Execute a Skill ───────────────────────────────────────────────────────────
 
 async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) {
@@ -61,22 +110,19 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
     const nftOwner = await registry.ownerOf(skillId);
     console.log(`  NFT owner (revenue recipient): ${nftOwner}`);
 
-    // 2. Download prompt template from 0G Storage
-    let systemPrompt;
-    try {
-      const tempPath = path.join(__dirname, `../temp/prompt-${skillId}.json`);
-      fs.mkdirSync(path.dirname(tempPath), { recursive: true });
-      const err = await indexer.download(skill.promptHash, tempPath, true);
-      if (err) throw new Error(`Storage download: ${err}`);
-      const promptData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
-      systemPrompt = promptData.systemPrompt;
-      fs.unlinkSync(tempPath);
-    } catch (storageErr) {
-      console.warn(`  [warn] Cannot download prompt from storage: ${storageErr.message}`);
-      console.warn(`  [warn] Using metadata as fallback`);
-      const meta = JSON.parse(metadata);
-      systemPrompt = meta.systemPrompt || `You are an AI assistant. Skill: ${meta.name}`;
+    // 2. Load system prompt — prefer encrypted storage payload, fall back to plaintext metadata
+    const systemPrompt = await loadSystemPrompt({ skill, metadata, skillId });
+
+    // 2b. Wait for the real user input posted to the oracle API
+    const realInput = await waitForInput(executionId, 30000);
+    if (!realInput) {
+      throw new Error('Timed out waiting for input to be posted to oracle API');
     }
+    const expectedHash = ethers.keccak256(ethers.toUtf8Bytes(realInput));
+    if (expectedHash.toLowerCase() !== String(inputHash).toLowerCase()) {
+      throw new Error(`Input hash mismatch: expected ${expectedHash} got ${inputHash}`);
+    }
+    console.log(`  Real input retrieved (${realInput.length} chars), hash matches`);
 
     // 3. Get request headers — v0.7.x: ONE param only
     const headers = await broker.inference.getRequestHeaders(computeProvider);
@@ -92,7 +138,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
       body: JSON.stringify({
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Execute skill ${skillId}. Input hash: ${inputHash}` }
+          { role: 'user', content: realInput }
         ],
         model,
       }),
@@ -126,6 +172,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
     const receipt = {
       executionId,
       skillId: Number(skillId),
+      input: realInput,
       inputHash,
       outputHash: ethers.keccak256(ethers.toUtf8Bytes(output)),
       chatID,
@@ -214,6 +261,7 @@ async function main() {
   console.log(`Escrow: ${ESCROW_ADDR}`);
 
   await initBroker();
+  startApi({ indexer, wallet, rpcUrl: RPC_URL });
   await processPastEvents();
   await startListener();
 }

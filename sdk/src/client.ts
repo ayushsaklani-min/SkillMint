@@ -19,6 +19,7 @@ export class SkillMintClient {
   readonly registry: ethers.Contract;
   readonly escrow: ethers.Contract;
   readonly network: NetworkConfig;
+  readonly oracleUrl: string;
 
   constructor(options: SkillMintOptions) {
     // Resolve network config
@@ -35,6 +36,7 @@ export class SkillMintClient {
     this.wallet = new ethers.Wallet(options.privateKey, this.provider);
     this.registry = new ethers.Contract(this.network.registry, REGISTRY_ABI, this.wallet);
     this.escrow = new ethers.Contract(this.network.escrow, ESCROW_ABI, this.wallet);
+    this.oracleUrl = (options.oracleUrl || "https://oracle.skillmint-0g.xyz").replace(/\/$/, "");
   }
 
   /** Wallet address of the SDK user */
@@ -139,8 +141,21 @@ export class SkillMintClient {
       throw new Error("ExecutionRequested event not found in transaction receipt");
     }
 
+    const executionId = event.args[0] as string;
+
+    // Hand the real input off to the oracle so the TEE can actually run the skill.
+    const inputRes = await fetch(`${this.oracleUrl}/input`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ executionId, input }),
+    });
+    if (!inputRes.ok) {
+      const errText = await inputRes.text().catch(() => "");
+      throw new Error(`Oracle input handoff failed: ${inputRes.status} ${errText}`);
+    }
+
     return {
-      executionId: event.args[0] as string,
+      executionId,
       skillId: Number(event.args[1]),
       txHash: tx.hash,
       amount: ethers.formatEther(event.args[4]),
@@ -234,12 +249,35 @@ export class SkillMintClient {
     inputSchema?: Record<string, unknown>;
     outputSchema?: Record<string, unknown>;
   }): Promise<{ skillId: number; txHash: string; owner: string }> {
+    // Encrypt the prompt via the oracle before it touches on-chain metadata.
+    const encRes = await fetch(`${this.oracleUrl}/encrypt-prompt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ systemPrompt: params.systemPrompt }),
+    });
+    if (!encRes.ok) {
+      const errText = await encRes.text().catch(() => "");
+      throw new Error(`Oracle prompt encryption failed: ${encRes.status} ${errText}`);
+    }
+    const enc = (await encRes.json()) as {
+      storageRoot?: string;
+      iv?: string;
+      algo?: string;
+      keyId?: string;
+    };
+    if (!enc.storageRoot || !enc.iv) {
+      throw new Error("Oracle returned malformed encryption payload");
+    }
+
     const promptHash = ethers.keccak256(ethers.toUtf8Bytes(params.systemPrompt));
     const priceWei = ethers.parseEther(params.price);
     const metadata = JSON.stringify({
       name: params.name,
       description: params.description,
-      systemPrompt: params.systemPrompt,
+      storageRoot: enc.storageRoot,
+      iv: enc.iv,
+      algo: enc.algo,
+      keyId: enc.keyId,
       inputSchema: params.inputSchema,
       outputSchema: params.outputSchema,
     });

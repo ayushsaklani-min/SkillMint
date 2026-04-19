@@ -10,6 +10,7 @@ const RPC_URL = 'https://evmrpc-testnet.0g.ai';
 const REGISTRY_ADDR = '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'; // V2
 const COMPUTE_PROVIDER = '0xa48f01287233509FD694a22Bf840225062E67836';
 const MODEL = 'qwen/qwen-2.5-7b-instruct';
+const ORACLE_URL = (process.env.ORACLE_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 const REGISTRY_ABI = [
   'function registerSkill(bytes32 promptHash, address computeProvider, string model, uint256 priceA0GI, string metadata) returns (uint256)',
@@ -20,27 +21,46 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 const registry = new ethers.Contract(REGISTRY_ADDR, REGISTRY_ABI, wallet);
 
+async function encryptPrompt(systemPrompt) {
+  const res = await fetch(`${ORACLE_URL}/encrypt-prompt`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ systemPrompt }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Oracle encrypt-prompt failed (${res.status}): ${errText}`);
+  }
+  return res.json();
+}
+
 async function main() {
   const skills = JSON.parse(fs.readFileSync(path.join(__dirname, 'skills.json'), 'utf-8'));
   console.log(`Registering ${skills.length} skills on testnet...\n`);
+  console.log('Oracle URL:', ORACLE_URL);
   console.log('Balance:', ethers.formatEther(await provider.getBalance(wallet.address)), '0G');
 
   for (const skill of skills) {
+    console.log(`\nRegistering: ${skill.name}...`);
+    const enc = await encryptPrompt(skill.systemPrompt);
     const promptHash = ethers.keccak256(ethers.toUtf8Bytes(skill.systemPrompt));
     const priceWei = ethers.parseEther(skill.price);
     const metadata = JSON.stringify({
       name: skill.name,
       description: skill.description,
-      systemPrompt: skill.systemPrompt,
+      storageRoot: enc.storageRoot,
+      iv: enc.iv,
+      algo: enc.algo,
+      keyId: enc.keyId,
       inputSchema: skill.inputSchema,
       outputSchema: skill.outputSchema,
     });
 
-    console.log(`\nRegistering: ${skill.name}...`);
     const tx = await registry.registerSkill(promptHash, COMPUTE_PROVIDER, MODEL, priceWei, metadata);
     await tx.wait();
     const skillId = await registry.skillCount();
     console.log(`  Skill #${skillId} - TX: ${tx.hash}`);
+    console.log(`  Prompt ciphertext at 0G Storage root: ${enc.storageRoot}`);
   }
 
   console.log(`\nDone. Total skills on-chain: ${await registry.skillCount()}`);

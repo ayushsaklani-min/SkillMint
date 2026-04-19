@@ -57,3 +57,8 @@ coverage/
 
 # Misc
 .cache/
+
+# Secrets — never commit private keys or cert material
+*.pem
+*.key
+oracle/temp/

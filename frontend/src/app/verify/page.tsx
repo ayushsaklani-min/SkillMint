@@ -12,6 +12,7 @@ import Footer from "@/components/footer";
 interface ReceiptData {
   executionId: string;
   skillId: number;
+  input?: string;
   inputHash: string;
   outputHash: string;
   chatID: string;
@@ -256,7 +257,26 @@ function VerifyContent() {
                 </div>
               </div>
 
-              {/* Output */}
+              {/* Input + Output — proof the real user input was processed, not just a hash */}
+              {receipt.input && (
+                <div className="bg-white text-black border-2 border-black rounded-2xl shadow-brutal p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-display text-base tracking-wide">AGENT INPUT</h3>
+                    <span className="bg-[#0038FF] text-white font-mono text-[9px] font-bold tracking-widest px-2.5 py-1 border-2 border-black rounded-full">
+                      HASH-BOUND
+                    </span>
+                  </div>
+                  <pre className="whitespace-pre-wrap text-sm bg-[#FAFAFA] border-2 border-black p-4 rounded-xl overflow-x-auto max-h-60">
+                    {receipt.input}
+                  </pre>
+                  <p className="text-[11px] font-mono text-black/60 mt-3 leading-relaxed">
+                    This is the exact input the TEE ran the skill on. Hash matches the on-chain
+                    <code className="bg-[#FAFAFA] border border-black px-1 mx-1">inputHash</code>
+                    committed with the payment — tampering breaks the chain.
+                  </p>
+                </div>
+              )}
+
               <div className="bg-white text-black border-2 border-black rounded-2xl shadow-brutal p-6">
                 <h3 className="font-display text-base tracking-wide mb-4">AI OUTPUT</h3>
                 <pre className="whitespace-pre-wrap text-sm bg-[#FAFAFA] border-2 border-black p-4 rounded-xl overflow-x-auto max-h-96">

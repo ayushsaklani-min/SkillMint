@@ -35,6 +35,18 @@ export interface Skill {
 export interface SkillMetadata {
   name?: string;
   description?: string;
+  /** Storage root of the encrypted prompt on 0G Storage (AES-256-GCM). */
+  storageRoot?: string;
+  /** Base64 IV used for prompt encryption. */
+  iv?: string;
+  /** Encryption algorithm identifier (e.g. "aes-256-gcm"). */
+  algo?: string;
+  /** Oracle key identifier used to encrypt the prompt. */
+  keyId?: string;
+  /**
+   * Legacy plaintext prompt. Only populated for pre-encryption skills and
+   * kept for backward-compatible oracle fallback.
+   */
   systemPrompt?: string;
   inputSchema?: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -98,6 +110,12 @@ export interface SkillMintOptions {
   network?: "testnet" | "mainnet" | NetworkConfig;
   /** Custom RPC URL (overrides network default) */
   rpcUrl?: string;
+  /**
+   * Oracle HTTP URL for prompt encryption + input handoff.
+   * Required for publishing encrypted skills and executing with real input
+   * passthrough. Defaults to https://oracle.skillmint-0g.xyz.
+   */
+  oracleUrl?: string;
 }
 
 // ─── Events ─────────────────────────────────────────────────────────────────

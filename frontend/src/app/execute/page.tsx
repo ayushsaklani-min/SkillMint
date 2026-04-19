@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import Link from "next/link";
@@ -56,7 +56,7 @@ const INITIAL_STATE: ExecutionState = {
   skillName: "",
 };
 
-export default function ExecutePage() {
+function ExecuteContent() {
   const searchParams = useSearchParams();
   const preselectedSkill = searchParams.get("skill");
 
@@ -182,6 +182,16 @@ export default function ExecutePage() {
       }
       if (!executionId) throw new Error("ExecutionRequested event not found");
       setExec((prev) => ({ ...prev, phase: "waiting", executionId, txHash: tx.hash, amount: skill.price }));
+      // Hand the real input off to the oracle so the TEE can run the actual skill, not just a hash.
+      const inputRes = await fetch("/api/oracle/input", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ executionId, input: userInput }),
+      });
+      if (!inputRes.ok) {
+        const errText = await inputRes.text().catch(() => "");
+        throw new Error(`Failed to hand input to oracle: ${inputRes.status} ${errText}`);
+      }
       pollStatus(executionId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -517,5 +527,13 @@ function DetailRow({ label, value, mono, highlight, link }: { label: string; val
       <span className="font-mono text-[10px] font-bold tracking-widest text-black/50 min-w-[130px] shrink-0 pt-0.5">{label.toUpperCase()}</span>
       {content}
     </div>
+  );
+}
+
+export default function ExecutePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0038FF]" />}>
+      <ExecuteContent />
+    </Suspense>
   );
 }

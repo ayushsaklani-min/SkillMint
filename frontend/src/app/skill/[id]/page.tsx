@@ -17,7 +17,7 @@ interface SkillDetail {
   computeProvider: string;
   model: string;
   price: string;
-  metadata: { name?: string; description?: string; systemPrompt?: string };
+  metadata: { name?: string; description?: string; storageRoot?: string };
   active: boolean;
   total: number;
   successful: number;
