@@ -28,8 +28,12 @@ import { loadSystemPrompt } from './index-helpers.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const NETWORK = process.env.NETWORK || '0g-testnet';
-const IS_TESTNET = NETWORK === '0g-testnet';
+// Accept shorthand (`testnet`/`mainnet`) and fully-qualified x402 names
+// (`0g-testnet`/`0g-mainnet`) — the oracle service env uses the former,
+// our x402 code elsewhere uses the latter.
+const _NETWORK_RAW = process.env.NETWORK || '0g-testnet';
+const IS_TESTNET = _NETWORK_RAW === '0g-testnet' || _NETWORK_RAW === 'testnet';
+const NETWORK = IS_TESTNET ? '0g-testnet' : '0g-mainnet';
 const RPC_URL = IS_TESTNET ? 'https://evmrpc-testnet.0g.ai' : 'https://evmrpc.0g.ai';
 const INDEXER_URL = IS_TESTNET
   ? 'https://indexer-storage-testnet-turbo.0g.ai'

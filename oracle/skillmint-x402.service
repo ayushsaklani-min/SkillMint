@@ -1,0 +1,24 @@
+[Unit]
+Description=SkillMint x402 Skill Endpoint
+After=network-online.target skillmint-facilitator.service
+Wants=network-online.target
+Requires=skillmint-facilitator.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/skillmint/oracle
+ExecStartPre=/opt/skillmint/oracle/fetch-env.sh
+EnvironmentFile=/opt/skillmint/oracle/.env
+Environment=FACILITATOR_URL=http://127.0.0.1:3002
+Environment=X402_PORT=3003
+Environment=X402_BASE_URL=http://3.110.116.169:3003
+Environment=NETWORK=0g-testnet
+ExecStart=/usr/bin/node src/x402-server.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/skillmint-x402.log
+StandardError=append:/var/log/skillmint-x402.log
+
+[Install]
+WantedBy=multi-user.target
