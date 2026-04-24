@@ -41,6 +41,12 @@ test('large payload (10k chars) hashes without throwing', () => {
   assert.match(h, /^0x[0-9a-f]{64}$/);
 });
 
+test('5000-char solidity-ish payload hashes deterministically', () => {
+  const big = '// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n' + 'contract X { function f() public {} }\n'.repeat(200);
+  assert.ok(big.length >= 5000);
+  assert.equal(hashInput(big), hashInput(big));
+});
+
 test('non-string throws TypeError', () => {
   assert.throws(() => hashInput(123), TypeError);
   assert.throws(() => hashInput(null), TypeError);

@@ -239,12 +239,19 @@ async function processPastEvents() {
   if (pending === 0) console.log('[oracle] No pending executions found.');
 }
 
+// Serialize execution handling — the oracle uses ONE wallet, and concurrent
+// tx submission fights the nonce counter. Queue every ExecutionRequested so
+// confirmExecution runs sequentially.
+let executionQueue = Promise.resolve();
+
 async function startListener() {
   console.log(`[oracle] Listening for ExecutionRequested on ${ESCROW_ADDR}...`);
 
-  escrow.on('ExecutionRequested', async (executionId, skillId, agent, inputHash, amount, event) => {
-    console.log(`\n[oracle] Event: ExecutionRequested`);
-    await executeSkill(executionId, skillId, agent, inputHash, amount);
+  escrow.on('ExecutionRequested', (executionId, skillId, agent, inputHash, amount) => {
+    console.log(`\n[oracle] Event: ExecutionRequested ${executionId}`);
+    executionQueue = executionQueue
+      .catch(() => {})
+      .then(() => executeSkill(executionId, skillId, agent, inputHash, amount));
   });
 
   process.on('SIGINT', () => {
