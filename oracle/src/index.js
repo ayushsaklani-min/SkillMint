@@ -231,7 +231,7 @@ async function main() {
   console.log(`Escrow: ${ESCROW_ADDR}`);
 
   await initBroker();
-  startApi({ indexer, wallet, rpcUrl: RPC_URL });
+  startApi({ indexer, wallet, rpcUrl: RPC_URL, registry });
   await processPastEvents();
   await startListener();
 }

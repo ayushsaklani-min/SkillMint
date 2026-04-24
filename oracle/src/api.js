@@ -35,12 +35,28 @@ async function readJson(req) {
   });
 }
 
-export function startApi({ indexer, wallet, rpcUrl }) {
+export function startApi({ indexer, wallet, rpcUrl, registry }) {
   const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') return send(res, 204, {});
 
     if (req.method === 'GET' && req.url === '/health') {
-      return send(res, 200, { ok: true, wallet: wallet.address });
+      // Deep health: process liveness + RPC reachable + registry contract
+      // responding. A shallow {ok:true} had hid a real broken execution
+      // path, so probe the things the execution path depends on.
+      try {
+        const [block, skillCount] = await Promise.all([
+          wallet.provider.getBlockNumber(),
+          registry ? registry.skillCount() : Promise.resolve(null),
+        ]);
+        return send(res, 200, {
+          ok: true,
+          wallet: wallet.address,
+          block,
+          skillCount: skillCount !== null ? Number(skillCount) : null,
+        });
+      } catch (e) {
+        return send(res, 503, { ok: false, wallet: wallet.address, error: e.message });
+      }
     }
 
     const { allowed, retryAfter } = rateLimiter.check(clientIp(req));

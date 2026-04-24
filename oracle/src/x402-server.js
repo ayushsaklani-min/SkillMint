@@ -130,7 +130,23 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', async (_req, res) => {
-  res.json({ ok: true, network: NETWORK, wallet: wallet.address, mockInference: MOCK_INFERENCE });
+  try {
+    const [block, skillCount] = await Promise.all([
+      provider.getBlockNumber(),
+      registry.skillCount(),
+    ]);
+    res.json({
+      ok: true,
+      network: NETWORK,
+      wallet: wallet.address,
+      mockInference: MOCK_INFERENCE,
+      block,
+      skillCount: Number(skillCount),
+      facilitatorUrl: FACILITATOR_URL,
+    });
+  } catch (e) {
+    res.status(503).json({ ok: false, network: NETWORK, wallet: wallet.address, error: e.message });
+  }
 });
 
 app.get('/skill/:id', async (req, res) => {
