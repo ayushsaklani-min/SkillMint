@@ -9,6 +9,7 @@ import type {
   Execution,
   ExecutionRequest,
   ExecutionResult,
+  ExecutionOutcome,
   Reputation,
   RevenueInfo,
   PaymentPayload,
@@ -19,6 +20,42 @@ import type {
   ReceiptVerification,
 } from "./types.js";
 
+// ─── Internal helpers ──────────────────────────────────────────────────────
+
+/** Wrap fetch with context. Turns `fetch failed` into something actionable. */
+async function httpJson<T>(label: string, url: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    throw new Error(`${label}: network error reaching ${url} — ${(e as Error).message}. If the default is unreachable, pass a custom url to SkillMintClient().`);
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`${label}: HTTP ${res.status} from ${url} — ${text.slice(0, 400)}`);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${label}: non-JSON response from ${url} — ${text.slice(0, 200)}`);
+  }
+}
+
+/** Run async fn over items with bounded concurrency. */
+async function mapConcurrent<T, R>(items: T[], limit: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = idx++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 export class SkillMintClient {
   readonly provider: ethers.JsonRpcProvider;
   readonly wallet: ethers.Wallet;
@@ -27,6 +64,7 @@ export class SkillMintClient {
   readonly w0g: ethers.Contract;
   readonly network: NetworkConfig;
   readonly oracleUrl: string;
+  readonly x402Url: string;
 
   constructor(options: SkillMintOptions) {
     // Resolve network config
@@ -44,7 +82,8 @@ export class SkillMintClient {
     this.registry = new ethers.Contract(this.network.registry, REGISTRY_ABI, this.wallet);
     this.escrow = new ethers.Contract(this.network.escrow, ESCROW_ABI, this.wallet);
     this.w0g = new ethers.Contract(this.network.w0g, W0G_ABI, this.wallet);
-    this.oracleUrl = (options.oracleUrl || "https://oracle.skillmint-0g.xyz").replace(/\/$/, "");
+    this.oracleUrl = (options.oracleUrl || this.network.oracleUrl).replace(/\/$/, "");
+    this.x402Url = (options.x402Url || this.network.x402Url).replace(/\/$/, "");
   }
 
   /** Wallet address of the SDK user */
@@ -70,16 +109,41 @@ export class SkillMintClient {
     return this._parseSkill(skillId, raw, owner, rep);
   }
 
-  /** List all skills on-chain */
-  async listSkills(): Promise<Skill[]> {
+  /**
+   * List all skills on-chain with bounded RPC concurrency. Public Galileo
+   * RPCs rate-limit Promise.all over a full registry, so we cap at 3.
+   */
+  async listSkills(opts: { concurrency?: number } = {}): Promise<Skill[]> {
     const count = await this.getSkillCount();
     if (count === 0) return [];
+    const ids = Array.from({ length: count }, (_, i) => i + 1);
+    return mapConcurrent(ids, opts.concurrency ?? 3, (id) => this.getSkill(id));
+  }
 
-    const promises = [];
-    for (let i = 1; i <= count; i++) {
-      promises.push(this.getSkill(i));
+  /**
+   * Resolve a skill from a user-friendly identifier:
+   *   - numeric id (or numeric string)
+   *   - promptHash (keccak256 of the encrypted-prompt body — length 66)
+   *   - storageRoot (same length, distinct value)
+   *   - metadata.name (case-insensitive substring match)
+   *
+   * Returns the first Skill that matches, or null. Useful when agents are
+   * handed a hash from a published.json log and expect it to "just work".
+   */
+  async resolveSkill(identifier: string | number): Promise<Skill | null> {
+    if (typeof identifier === "number") return this.getSkill(identifier).catch(() => null);
+    if (/^\d+$/.test(identifier)) return this.getSkill(Number(identifier)).catch(() => null);
+
+    const all = await this.listSkills();
+    const id = identifier.toLowerCase();
+    if (id.startsWith("0x") && id.length === 66) {
+      return (
+        all.find((s) => s.promptHash.toLowerCase() === id) ||
+        all.find((s) => (s.metadata.storageRoot || "").toLowerCase() === id) ||
+        null
+      );
     }
-    return Promise.all(promises);
+    return all.find((s) => (s.metadata.name || "").toLowerCase().includes(id)) || null;
   }
 
   /** Search skills by name or description (case-insensitive) */
@@ -152,15 +216,11 @@ export class SkillMintClient {
     const executionId = event.args[0] as string;
 
     // Hand the real input off to the oracle so the TEE can actually run the skill.
-    const inputRes = await fetch(`${this.oracleUrl}/input`, {
+    await httpJson<{ ok: true }>("oracle /input", `${this.oracleUrl}/input`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ executionId, input }),
     });
-    if (!inputRes.ok) {
-      const errText = await inputRes.text().catch(() => "");
-      throw new Error(`Oracle input handoff failed: ${inputRes.status} ${errText}`);
-    }
 
     return {
       executionId,
@@ -206,6 +266,59 @@ export class SkillMintClient {
         });
       });
     });
+  }
+
+  /**
+   * One-shot "what happened with this execution?" — merges on-chain state,
+   * the ExecutionConfirmed event, and the stored receipt body. Lets agents
+   * go executionId → output in a single call.
+   */
+  async getExecutionOutcome(executionId: string): Promise<ExecutionOutcome> {
+    const exec = await this.getExecution(executionId);
+    const base: ExecutionOutcome = {
+      executionId,
+      skillId: exec.skillId,
+      settled: exec.settled,
+      refunded: exec.refunded,
+      receiptHash: null,
+      payee: null,
+      payeeAmount: null,
+      treasuryAmount: null,
+      receipt: null,
+    };
+    if (!exec.settled) return base;
+
+    // Pull the ExecutionConfirmed event for this executionId — scan a
+    // reasonable window so newly-confirmed executions resolve quickly.
+    const head = await this.provider.getBlockNumber();
+    const from = Math.max(0, head - 5000);
+    const events = await this.escrow.queryFilter(
+      this.escrow.filters.ExecutionConfirmed(executionId),
+      from,
+      head
+    );
+    if (events.length === 0) return base;
+
+    const args = (events[events.length - 1] as ethers.EventLog).args;
+    const receiptHash: string = String(args[1]);
+    const payee: string = String(args[2]);
+    const payeeAmount: bigint = args[3] as bigint;
+    const treasuryAmount: bigint = args[4] as bigint;
+
+    let receipt: SkillReceipt | null = null;
+    try {
+      receipt = await this.fetchReceipt(receiptHash);
+    } catch {
+      // Storage fetch is best-effort — the on-chain hash is the source of truth.
+    }
+    return {
+      ...base,
+      receiptHash,
+      payee,
+      payeeAmount: ethers.formatEther(payeeAmount),
+      treasuryAmount: ethers.formatEther(treasuryAmount),
+      receipt,
+    };
   }
 
   /** Get execution details by ID */
@@ -258,21 +371,11 @@ export class SkillMintClient {
     outputSchema?: Record<string, unknown>;
   }): Promise<{ skillId: number; txHash: string; owner: string }> {
     // Encrypt the prompt via the oracle before it touches on-chain metadata.
-    const encRes = await fetch(`${this.oracleUrl}/encrypt-prompt`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ systemPrompt: params.systemPrompt }),
-    });
-    if (!encRes.ok) {
-      const errText = await encRes.text().catch(() => "");
-      throw new Error(`Oracle prompt encryption failed: ${encRes.status} ${errText}`);
-    }
-    const enc = (await encRes.json()) as {
-      storageRoot?: string;
-      iv?: string;
-      algo?: string;
-      keyId?: string;
-    };
+    const enc = await httpJson<{ storageRoot?: string; iv?: string; algo?: string; keyId?: string }>(
+      "oracle /encrypt-prompt",
+      `${this.oracleUrl}/encrypt-prompt`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ systemPrompt: params.systemPrompt }) }
+    );
     if (!enc.storageRoot || !enc.iv) {
       throw new Error("Oracle returned malformed encryption payload");
     }
@@ -460,20 +563,40 @@ export class SkillMintClient {
    *                        to cover any W0G shortfall.
    */
   async executeX402(
-    x402Url: string,
-    skillId: number,
-    input: string,
+    skillIdOrUrl: number | string,
+    skillIdOrInput: number | string,
+    input?: string,
     opts: { autoWrap?: boolean } = {}
   ): Promise<X402ExecuteResult> {
-    const base = x402Url.replace(/\/$/, "");
+    // Back-compat: older signature was executeX402(url, skillId, input).
+    // New preferred signature is executeX402(skillId, input) which uses the
+    // client's default x402Url.
+    let base: string;
+    let skillId: number;
+    let realInput: string;
+    if (typeof skillIdOrUrl === "string" && typeof skillIdOrInput === "number") {
+      base = skillIdOrUrl.replace(/\/$/, "");
+      skillId = skillIdOrInput;
+      realInput = String(input ?? "");
+    } else {
+      base = this.x402Url;
+      skillId = Number(skillIdOrUrl);
+      realInput = String(skillIdOrInput ?? "");
+    }
     const autoWrap = opts.autoWrap !== false;
 
     // 1. Probe — expect 402 with paymentRequirements
-    const probe = await fetch(`${base}/skill/${skillId}/execute`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ input }),
-    });
+    const probeUrl = `${base}/skill/${skillId}/execute`;
+    let probe: Response;
+    try {
+      probe = await fetch(probeUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: realInput }),
+      });
+    } catch (e) {
+      throw new Error(`x402 probe: network error reaching ${probeUrl} — ${(e as Error).message}. Pass {x402Url} to SkillMintClient() to override the default.`);
+    }
     if (probe.status !== 402) {
       throw new Error(`x402 probe: expected 402, got ${probe.status} ${await probe.text()}`);
     }
@@ -501,7 +624,7 @@ export class SkillMintClient {
     const r = await fetch(`${base}/skill/${skillId}/execute`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-payment": header },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({ input: realInput }),
     });
     const body = (await r.json().catch(() => ({}))) as {
       skillId?: number;
@@ -534,9 +657,7 @@ export class SkillMintClient {
    */
   async fetchReceipt(rootHash: string): Promise<SkillReceipt> {
     const url = `${this.network.storageIndexer.replace(/\/$/, "")}/file?root=${rootHash}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`fetchReceipt: ${r.status} ${await r.text()}`);
-    return (await r.json()) as SkillReceipt;
+    return httpJson<SkillReceipt>("fetchReceipt", url);
   }
 
   /**

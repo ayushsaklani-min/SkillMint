@@ -19,4 +19,5 @@ export type {
   X402ExecuteResult,
   SkillReceipt,
   ReceiptVerification,
+  ExecutionOutcome,
 } from "./types.js";

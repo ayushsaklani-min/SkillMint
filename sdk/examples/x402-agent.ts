@@ -1,20 +1,22 @@
 /**
  * Example: Execute a SkillMint skill via an x402 HTTP endpoint (W0G payment).
  *
- * Three calls — probe/pay is done by the SDK, receipt is verified by the SDK.
+ * Three SDK calls — the defaults already point at the hosted testnet x402
+ * endpoint, so no URL override is required.
  *
  * Usage:
- *   PRIVATE_KEY=0x... X402_URL=http://localhost:3003 SKILL_ID=15 npx tsx examples/x402-agent.ts
+ *   PRIVATE_KEY=0x... SKILL_ID=15 npx tsx examples/x402-agent.ts
+ *   (pass X402_URL=... to target a self-hosted x402 server)
  */
 import { SkillMintClient } from "../src/index.js";
 
 const sm = new SkillMintClient({
   privateKey: process.env.PRIVATE_KEY!,
   network: "testnet",
+  x402Url: process.env.X402_URL, // optional override
 });
 
 async function main() {
-  const X402_URL = process.env.X402_URL || "http://127.0.0.1:3003";
   const SKILL_ID = Number(process.env.SKILL_ID || "15");
   const INPUT =
     process.argv[2] ||
@@ -23,11 +25,11 @@ async function main() {
   console.log(`Agent  : ${sm.address}`);
   console.log(`A0GI   : ${await sm.getBalance()}`);
   console.log(`W0G    : ${await sm.getW0GBalance()}`);
-  console.log(`Skill  : #${SKILL_ID} @ ${X402_URL}\n`);
+  console.log(`Skill  : #${SKILL_ID} @ ${sm.x402Url}\n`);
 
   // 1. Pay + run — SDK handles probe, auto-wrap, sign, retry
   console.log("[1] client.executeX402()");
-  const res = await sm.executeX402(X402_URL, SKILL_ID, INPUT);
+  const res = await sm.executeX402(SKILL_ID, INPUT);
   console.log(`    settle tx : ${res.settlement.transaction}`);
   console.log(`    receipt   : ${res.receiptRootHash}`);
   console.log(`    paidW0G   : ${res.paidW0G}`);

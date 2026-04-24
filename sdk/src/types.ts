@@ -12,6 +12,14 @@ export interface NetworkConfig {
   w0g: string;
   /** x402 network name used in paymentRequirements (e.g. "0g-testnet"). */
   x402Network: string;
+  /**
+   * HTTPS URL of the SkillMint oracle HTTP API (encrypt-prompt,
+   * input-handoff). Default points at a Vercel-proxied backend so
+   * consumers don't need to know the EC2 host.
+   */
+  oracleUrl: string;
+  /** HTTPS URL of the SkillMint x402-payable skill endpoint root. */
+  x402Url: string;
 }
 
 // ─── Skill ──────────────────────────────────────────────────────────────────
@@ -115,11 +123,31 @@ export interface SkillMintOptions {
   /** Custom RPC URL (overrides network default) */
   rpcUrl?: string;
   /**
-   * Oracle HTTP URL for prompt encryption + input handoff.
-   * Required for publishing encrypted skills and executing with real input
-   * passthrough. Defaults to https://oracle.skillmint-0g.xyz.
+   * Oracle HTTP URL for prompt encryption + input handoff. Defaults to the
+   * network's Vercel-proxied endpoint so consumers don't need to override.
    */
   oracleUrl?: string;
+  /**
+   * x402-payable skill endpoint root (e.g. for `executeX402`). Defaults to
+   * the network's Vercel-proxied endpoint.
+   */
+  x402Url?: string;
+}
+
+// ─── Execution outcome + receipts ──────────────────────────────────────────
+
+/** One-call result of `getExecutionOutcome(id)` — merges on-chain + storage. */
+export interface ExecutionOutcome {
+  executionId: string;
+  skillId: number;
+  settled: boolean;
+  refunded: boolean;
+  receiptHash: string | null;
+  payee: string | null;
+  payeeAmount: string | null;
+  treasuryAmount: string | null;
+  /** Full receipt body from 0G Storage; null if still settling or not yet confirmed. */
+  receipt: SkillReceipt | null;
 }
 
 // ─── Events ─────────────────────────────────────────────────────────────────

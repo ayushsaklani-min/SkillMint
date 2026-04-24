@@ -6,8 +6,11 @@ export const TESTNET = {
   storageIndexer: 'https://indexer-storage-testnet-turbo.0g.ai',
   storageFlowContract: '0x22E03a6A89B950F1c82ec5e74F8eCa321a105296',
   contracts: {
-    registry: '0xC4b41DA4FF0fcE60a6202864308983C23F3ea767',
-    escrow: '0xF725E9cf83d49c5789235A38734b863a8ACfFd07',
+    // SkillRegistryV2 + SkillEscrowV2 — canonical testnet deployment.
+    // sdk/src/constants.ts, oracle/src/index.js, and frontend/src/lib/contracts.ts
+    // must all agree with these values.
+    registry: '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4',
+    escrow: '0xe2841b105B695610f2c1194f8865474A536184dB',
     w0g: '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D',
   },
 };
