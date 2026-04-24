@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { hashInput, hashPrompt } from '../../shared/hash.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +27,7 @@ async function main() {
 
   // 1. Register a test skill
   console.log('[1] Registering test skill...');
-  const promptHash = ethers.keccak256(ethers.toUtf8Bytes('You are a smart contract auditor.'));
+  const promptHash = hashPrompt('You are a smart contract auditor.');
   const computeProvider = '0xa48f01287233509FD694a22Bf840225062E67836'; // testnet qwen provider from Day 0
   const model = 'qwen/qwen-2.5-7b-instruct';
   const price = ethers.parseEther('0.001');
@@ -46,7 +47,7 @@ async function main() {
 
   // 2. Request execution (agent pays escrow)
   console.log('\n[2] Requesting execution...');
-  const inputHash = ethers.keccak256(ethers.toUtf8Bytes('pragma solidity ^0.8.0; contract Test {}'));
+  const inputHash = hashInput('pragma solidity ^0.8.0; contract Test {}');
   const execTx = await escrow.requestExecution(skillId, inputHash, { value: price });
   const execReceipt = await execTx.wait();
 

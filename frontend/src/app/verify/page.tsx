@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
+import { hashInput } from "../../../../shared/hash.js";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -44,6 +45,12 @@ function VerifyContent() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [skill, setSkill] = useState<SkillData | null>(null);
   const [onChainSettled, setOnChainSettled] = useState<boolean | null>(null);
+  const [checks, setChecks] = useState<{
+    rootMatch: boolean | null;
+    inputHashOnChain: boolean | null;
+    inputRecompute: boolean | null;
+    outputRecompute: boolean | null;
+  }>({ rootMatch: null, inputHashOnChain: null, inputRecompute: null, outputRecompute: null });
 
   useEffect(() => {
     if (queryHash) verify(queryHash);
@@ -54,6 +61,7 @@ function VerifyContent() {
     const hash = (hashOverride || receiptHash).trim();
     if (!hash) return;
     setLoading(true); setError(""); setReceipt(null); setSkill(null); setOnChainSettled(null);
+    setChecks({ rootMatch: null, inputHashOnChain: null, inputRecompute: null, outputRecompute: null });
     try {
       const res = await fetch(`/api/verify?hash=${encodeURIComponent(hash)}`);
       if (!res.ok) { const errData = await res.json(); throw new Error(errData.error || `HTTP ${res.status}`); }
@@ -77,6 +85,34 @@ function VerifyContent() {
       });
       const exec = await escrow.getExecution(data.executionId);
       setOnChainSettled(exec.settled);
+
+      // Real verification — not just display.
+      // 1. On-chain receiptHash IS the 0G Storage root hash (see SkillEscrow.sol:133 —
+      //    "receiptHash: rootHash of receipt JSON uploaded to 0G Storage"). Direct equality.
+      const confirmedFilter = escrow.filters.ExecutionConfirmed(data.executionId);
+      const confirmedEvents = await escrow.queryFilter(confirmedFilter, 0, "latest");
+      let rootMatch: boolean | null = null;
+      if (confirmedEvents.length > 0) {
+        const ev = confirmedEvents[confirmedEvents.length - 1] as ethers.EventLog;
+        const onChainReceiptHash = String(ev.args.receiptHash).toLowerCase();
+        rootMatch = onChainReceiptHash === hash.toLowerCase();
+      }
+
+      // 2. Receipt inputHash == on-chain inputHash committed at funding time.
+      const inputHashOnChain =
+        String(data.inputHash).toLowerCase() === String(exec.inputHash).toLowerCase();
+
+      // 3. Recompute keccak256(input) and match receipt.inputHash (byte-exact input).
+      const inputRecompute =
+        data.input != null
+          ? hashInput(data.input).toLowerCase() === String(data.inputHash).toLowerCase()
+          : null;
+
+      // 4. Recompute keccak256(output) and match receipt.outputHash.
+      const outputRecompute =
+        hashInput(data.output).toLowerCase() === String(data.outputHash).toLowerCase();
+
+      setChecks({ rootMatch, inputHashOnChain, inputRecompute, outputRecompute });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -84,7 +120,20 @@ function VerifyContent() {
     }
   }
 
-  const allVerified = receipt && receipt.teeVerified === true && onChainSettled === true;
+  const allVerified =
+    receipt &&
+    receipt.teeVerified === true &&
+    onChainSettled === true &&
+    checks.rootMatch === true &&
+    checks.inputHashOnChain === true &&
+    checks.outputRecompute === true &&
+    (checks.inputRecompute === true || checks.inputRecompute === null);
+
+  const anyFailed =
+    checks.rootMatch === false ||
+    checks.inputHashOnChain === false ||
+    checks.inputRecompute === false ||
+    checks.outputRecompute === false;
 
   return (
     <main className="min-h-screen bg-[#0038FF] text-white grid-bg-brutal">
@@ -131,15 +180,7 @@ function VerifyContent() {
           </button>
         </motion.div>
 
-        <button
-          onClick={() => {
-            const demo = "0xb54a420f85442110551082eca34f72a4197166d6265e6963652310f462129d44";
-            setReceiptHash(demo); verify(demo);
-          }}
-          className="text-xs font-mono font-bold text-white/70 hover:text-[#D4FF00] mb-8 block transition-colors"
-        >
-          → TRY DEMO RECEIPT HASH
-        </button>
+        <div className="mb-8" />
 
         <AnimatePresence>
           {error && (
@@ -168,7 +209,7 @@ function VerifyContent() {
             >
               {/* Certificate Card */}
               <div className="bg-white text-black border-2 border-black rounded-3xl shadow-brutal-lg overflow-hidden">
-                <div className={`${allVerified ? "bg-[#D4FF00]" : "bg-[#FF9D00]"} border-b-2 border-black h-2`} />
+                <div className={`${allVerified ? "bg-[#D4FF00]" : anyFailed ? "bg-[#FF3333]" : "bg-[#FF9D00]"} border-b-2 border-black h-2`} />
                 <div className="p-8 text-center">
                   {allVerified ? (
                     <>
@@ -181,7 +222,17 @@ function VerifyContent() {
                       </motion.div>
                       <h2 className="font-display text-4xl sm:text-5xl mb-2">VERIFIED</h2>
                       <p className="text-sm font-mono font-bold tracking-wider text-black/70 mb-6">
-                        AUTHENTIC · TEE-ATTESTED · ON-CHAIN SETTLED
+                        ROOT-MATCHED · HASH-BOUND · TEE-ATTESTED · ON-CHAIN SETTLED
+                      </p>
+                    </>
+                  ) : anyFailed ? (
+                    <>
+                      <div className="w-24 h-24 rounded-3xl bg-[#FF3333] border-2 border-black shadow-brutal flex items-center justify-center mx-auto mb-5">
+                        <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </div>
+                      <h2 className="font-display text-4xl sm:text-5xl mb-2">TAMPERED</h2>
+                      <p className="text-sm font-mono font-bold tracking-wider text-black/70 mb-6">
+                        AT LEAST ONE CRYPTOGRAPHIC CHECK FAILED
                       </p>
                     </>
                   ) : (
@@ -189,17 +240,20 @@ function VerifyContent() {
                       <div className="w-24 h-24 rounded-3xl bg-[#FF9D00] border-2 border-black shadow-brutal flex items-center justify-center mx-auto mb-5">
                         <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.008v.008H12v-.008z" /></svg>
                       </div>
-                      <h2 className="font-display text-4xl sm:text-5xl mb-2">RECEIPT FOUND</h2>
+                      <h2 className="font-display text-4xl sm:text-5xl mb-2">PARTIAL</h2>
                       <p className="text-sm font-mono font-bold tracking-wider text-black/70 mb-6">
                         TEE: {receipt.teeVerified === true ? "VERIFIED" : receipt.teeVerified === false ? "TAMPERED" : "UNKNOWN"}
                       </p>
                     </>
                   )}
 
-                  <div className="grid grid-cols-3 gap-3 max-w-lg mx-auto">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">
+                    <VerifyBadge label="ROOT ON-CHAIN" verified={checks.rootMatch === true} />
+                    <VerifyBadge label="INPUT COMMITTED" verified={checks.inputHashOnChain === true} />
+                    <VerifyBadge label="OUTPUT HASH" verified={checks.outputRecompute === true} />
+                    <VerifyBadge label="INPUT RECOMPUTE" verified={checks.inputRecompute === true} na={checks.inputRecompute === null} />
                     <VerifyBadge label="TEE ATTESTED" verified={receipt.teeVerified === true} />
                     <VerifyBadge label="ON-CHAIN SETTLED" verified={onChainSettled === true} />
-                    <VerifyBadge label="RECEIPT STORED" verified={true} />
                   </div>
                 </div>
               </div>
@@ -324,7 +378,17 @@ export default function VerifyPage() {
   );
 }
 
-function VerifyBadge({ label, verified }: { label: string; verified: boolean }) {
+function VerifyBadge({ label, verified, na }: { label: string; verified: boolean; na?: boolean }) {
+  if (na) {
+    return (
+      <div className="border-2 border-black rounded-xl p-3 text-center bg-[#EEEEEE]">
+        <div className="w-7 h-7 mx-auto rounded-full flex items-center justify-center mb-1.5 border-2 border-black bg-white text-black/50">
+          <span className="font-mono text-[9px] font-bold">N/A</span>
+        </div>
+        <span className="font-mono text-[9px] font-bold tracking-widest text-black/50">{label}</span>
+      </div>
+    );
+  }
   return (
     <div className={`border-2 border-black rounded-xl p-3 text-center ${verified ? "bg-[#D4FF00]" : "bg-[#FAFAFA]"}`}>
       <div className={`w-7 h-7 mx-auto rounded-full flex items-center justify-center mb-1.5 border-2 border-black ${verified ? "bg-black text-[#D4FF00]" : "bg-white text-black/40"}`}>

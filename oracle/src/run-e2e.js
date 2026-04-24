@@ -9,6 +9,7 @@ import { MemData, Indexer } from '@0gfoundation/0g-ts-sdk';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { hashInput, hashOutput, hashPrompt } from '../../shared/hash.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,7 +34,7 @@ async function main() {
   // ─── Step 1: Register skill ──────────────────────────────────────────────
   console.log('\n[1/7] Registering skill...');
   const systemPrompt = 'You are a smart contract security auditor. Analyze the provided Solidity code and return JSON: { "vulnerabilities": [], "severity": "low|medium|high|critical", "recommendations": [] }';
-  const promptHash = ethers.keccak256(ethers.toUtf8Bytes(systemPrompt));
+  const promptHash = hashPrompt(systemPrompt);
   const computeProvider = '0xa48f01287233509FD694a22Bf840225062E67836';
   const model = 'qwen/qwen-2.5-7b-instruct';
   const price = ethers.parseEther('0.001');
@@ -51,7 +52,7 @@ async function main() {
   // ─── Step 2: Request execution (agent side) ──────────────────────────────
   console.log('\n[2/7] Requesting execution (agent pays escrow)...');
   const agentInput = 'pragma solidity ^0.8.0;\ncontract Vault {\n  mapping(address => uint) balances;\n  function withdraw() external {\n    uint bal = balances[msg.sender];\n    (bool ok,) = msg.sender.call{value: bal}("");\n    require(ok);\n    balances[msg.sender] = 0;\n  }\n}';
-  const inputHash = ethers.keccak256(ethers.toUtf8Bytes(agentInput));
+  const inputHash = hashInput(agentInput);
 
   const execTx = await escrow.requestExecution(skillId, inputHash, { value: price });
   const execReceipt = await execTx.wait();
@@ -83,7 +84,7 @@ async function main() {
   if (!res.ok) throw new Error(`Inference failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   const output = data.choices[0].message.content;
-  console.log(`  Output: ${output.substring(0, 200)}...`);
+  console.log(`  Output received (${output?.length || 0} chars)`);
 
   // ─── Step 4: Verify TEE ──────────────────────────────────────────────────
   console.log('\n[4/7] Verifying TEE attestation...');
@@ -100,7 +101,7 @@ async function main() {
   console.log('\n[5/7] Uploading receipt to 0G Storage...');
   const receipt = {
     executionId, skillId, inputHash,
-    outputHash: ethers.keccak256(ethers.toUtf8Bytes(output)),
+    outputHash: hashOutput(output),
     chatID, teeVerified: isValid,
     providerAddress: computeProvider,
     timestamp: Date.now(),
@@ -121,8 +122,8 @@ async function main() {
 
   // ─── Step 6: Confirm execution on-chain ──────────────────────────────────
   console.log('\n[6/7] Confirming execution on-chain (90/10 split)...');
-  const receiptHashBytes = ethers.keccak256(ethers.toUtf8Bytes(receiptRootHash));
-  const confirmTx = await escrow.confirmExecution(executionId, receiptHashBytes);
+  // Contract expects the 0G Storage root hash directly (SkillEscrow.sol:133).
+  const confirmTx = await escrow.confirmExecution(executionId, receiptRootHash);
   await confirmTx.wait();
   console.log(`  Confirmed. TX: ${confirmTx.hash}`);
 

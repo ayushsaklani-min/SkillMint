@@ -1,0 +1,8 @@
+[
+  { "txData": "To: 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D (UniswapV2Router), method: swapExactTokensForETH, value: 0, input swaps 1000 USDC for ETH with 0.5% slippage, path [USDC, WETH]" },
+  { "txData": "To: 0x3154Cf16ccdb4C6d922629664174b904d80F2C35 (Polygon PoS Bridge), method: depositFor, value: 0.5 ETH, locks ETH on L1 to mint wETH on Polygon" },
+  { "txData": "To: 0x495f947276749Ce646f68AC8c248420045cb7b5e (OpenSea), method: fulfillBasicOrder, value: 0.3 ETH, purchases an NFT from collection Bored Apes" },
+  { "txData": "To: 0x00000000219ab540356cBB839Cbe05303d7705Fa (Ethereum Beacon Deposit), method: deposit, value: 32 ETH, stakes 32 ETH with validator pubkey provided" },
+  { "txData": "To: 0xdAC17F958D2ee523a2206206994597C13D831ec7 (USDT), method: approve, value: 0, grants unlimited spending allowance to 0x1111111254EEB25477B68fb85Ed929f73A960582 (1inch Router)" },
+  { "txData": "To: 0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199, method: mintPublic, value: 0.08 ETH, calls mint function — contract not verified, function selector matches known mint patterns but project unknown" }
+]

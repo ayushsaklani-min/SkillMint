@@ -5,6 +5,7 @@ import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI } from "@/lib/contracts";
+import { hashPrompt } from "../../../../shared/hash.js";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -75,7 +76,7 @@ export default function PublishPage() {
         throw new Error("Oracle returned malformed encryption payload");
       }
 
-      const promptHash = ethers.keccak256(ethers.toUtf8Bytes(systemPrompt));
+      const promptHash = hashPrompt(systemPrompt);
       const priceWei = ethers.parseEther(price);
       const metadata = JSON.stringify({
         name,

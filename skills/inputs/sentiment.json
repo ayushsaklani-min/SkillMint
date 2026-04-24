@@ -1,0 +1,8 @@
+[
+  { "symbol": "WIF", "activity": "30-day: price +180%, TVL on native DEX +45%, 2 new CEX listings this week, dev team shipped major upgrade, community hackathon announced with $500k prize pool, Twitter mentions up 3x." },
+  { "symbol": "LUNA", "activity": "Price -72% over 7 days, validator count dropped 40%, lead developer resigned, lawsuit filed by investors, TVL collapsed from $20B to $1.8B, major exchanges delisting." },
+  { "symbol": "ETH", "activity": "Price stable around $3,100 for 2 weeks, gas fees normal at 15 gwei, L2 usage growing steadily, no major protocol upgrades pending, institutional flows neutral." },
+  { "symbol": "PEPE", "activity": "Price +35% in 24h then -18% retracement, extreme volatility, whale wallet sold $8M worth, meme cycle on Twitter but technicals broken, new copycat tokens launching daily." },
+  { "symbol": "ARB", "activity": "Price +12% on token unlock news that was priced in; daily active addresses up 22% MoM; Arbitrum Orbit chains multiplying; bridge volume flat; governance vote on incentives passed with 82% yes." },
+  { "symbol": "CELR", "activity": "No significant news in 30 days, price drifting -8% against ETH, TVL flat, no new integrations announced, team quiet on social, trading volume half of 90-day average." }
+]

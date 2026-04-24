@@ -8,6 +8,8 @@ import path from 'path';
 import { startApi } from './api.js';
 import { decryptPrompt } from './crypto.js';
 import { waitForInput } from './store.js';
+import { hashInput, hashOutput } from '../../shared/hash.js';
+import { serializeReceipt } from '../../shared/receipt.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,7 +120,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
     if (!realInput) {
       throw new Error('Timed out waiting for input to be posted to oracle API');
     }
-    const expectedHash = ethers.keccak256(ethers.toUtf8Bytes(realInput));
+    const expectedHash = hashInput(realInput);
     if (expectedHash.toLowerCase() !== String(inputHash).toLowerCase()) {
       throw new Error(`Input hash mismatch: expected ${expectedHash} got ${inputHash}`);
     }
@@ -151,7 +153,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
 
     const data = await res.json();
     const output = data.choices?.[0]?.message?.content;
-    console.log(`  Output: ${output?.substring(0, 100)}...`);
+    console.log(`  Output received (${output?.length || 0} chars)`);
 
     // 6. Extract chatID — ZG-Res-Key first, fallback to data.id
     const chatID = res.headers.get('ZG-Res-Key') || data.id;
@@ -174,7 +176,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
       skillId: Number(skillId),
       input: realInput,
       inputHash,
-      outputHash: ethers.keccak256(ethers.toUtf8Bytes(output)),
+      outputHash: hashOutput(output),
       chatID,
       teeVerified: isValid,
       providerAddress: computeProvider,
@@ -184,7 +186,7 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
       output,
     };
 
-    const bytes = new TextEncoder().encode(JSON.stringify(receipt));
+    const bytes = new TextEncoder().encode(serializeReceipt(receipt));
     const memData = new MemData(bytes);
     const [tree, treeErr] = await memData.merkleTree();
     if (treeErr) throw new Error(`Merkle error: ${treeErr}`);

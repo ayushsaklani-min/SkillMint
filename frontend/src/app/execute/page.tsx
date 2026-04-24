@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
+import { hashInput } from "../../../../shared/hash.js";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -170,7 +171,7 @@ function ExecuteContent() {
       setWalletAddr(addr);
       setExec((prev) => ({ ...prev, phase: "sending" }));
       const escrow = new ethers.Contract(NETWORK.escrow, ESCROW_ABI, signer);
-      const inputHash = ethers.keccak256(ethers.toUtf8Bytes(userInput));
+      const inputHash = hashInput(userInput);
       const tx = await escrow.requestExecution(selectedSkill, inputHash, { value: skill.priceWei });
       const receipt = await tx.wait();
       let executionId = "";

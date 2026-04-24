@@ -2,8 +2,16 @@ import http from 'node:http';
 import { encryptPrompt } from './crypto.js';
 import { putInput } from './store.js';
 import { MemData } from '@0gfoundation/0g-ts-sdk';
+import { createRateLimiter } from './ratelimit.js';
 
 const PORT = Number(process.env.ORACLE_API_PORT || 3001);
+const rateLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
+
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
 
 function send(res, status, body) {
   res.writeHead(status, {
@@ -33,6 +41,16 @@ export function startApi({ indexer, wallet, rpcUrl }) {
 
     if (req.method === 'GET' && req.url === '/health') {
       return send(res, 200, { ok: true, wallet: wallet.address });
+    }
+
+    const { allowed, retryAfter } = rateLimiter.check(clientIp(req));
+    if (!allowed) {
+      res.writeHead(429, {
+        'content-type': 'application/json',
+        'retry-after': String(retryAfter),
+        'access-control-allow-origin': '*',
+      });
+      return res.end(JSON.stringify({ error: 'rate limit exceeded', retryAfter }));
     }
 
     if (req.method === 'POST' && req.url === '/encrypt-prompt') {
