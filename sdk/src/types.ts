@@ -8,6 +8,10 @@ export interface NetworkConfig {
   storageIndexer: string;
   registry: string;
   escrow: string;
+  /** Canonical/deployed W0G (Wrapped 0G) ERC-20 used for x402 payments. */
+  w0g: string;
+  /** x402 network name used in paymentRequirements (e.g. "0g-testnet"). */
+  x402Network: string;
 }
 
 // ─── Skill ──────────────────────────────────────────────────────────────────
@@ -134,4 +138,81 @@ export interface ExecutionConfirmedEvent {
   payee: string;
   payeeAmount: string;
   treasuryAmount: string;
+}
+
+// ─── x402 (pay-with-W0G) ────────────────────────────────────────────────────
+
+/** EIP-3009 authorization payload signed by the agent. */
+export interface EIP3009Authorization {
+  from: string;
+  to: string;
+  value: string;
+  validAfter: string;
+  validBefore: string;
+  nonce: string;
+}
+
+/** x402 v1 payload carried in the X-PAYMENT header. */
+export interface PaymentPayload {
+  x402Version: 1;
+  scheme: "exact";
+  network: string;
+  payload: {
+    signature: string;
+    authorization: EIP3009Authorization;
+  };
+}
+
+/** Requirements returned by an x402 skill server in the 402 body. */
+export interface PaymentRequirements {
+  scheme: "exact";
+  network: string;
+  maxAmountRequired: string;
+  resource: string;
+  description: string;
+  mimeType: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+  extra?: { name?: string; version?: string };
+}
+
+export interface X402ExecuteResult {
+  skillId: number;
+  output: string;
+  receiptRootHash: string;
+  settlement: { transaction: string; network: string; payer: string; blockNumber?: number };
+  payer: string;
+  paidW0G: string;
+}
+
+/** Full receipt JSON stored on 0G Storage after a successful skill run. */
+export interface SkillReceipt {
+  skillId: number;
+  input: string;
+  inputHash: string;
+  outputHash: string;
+  output: string;
+  chatID: string;
+  teeVerified: boolean;
+  providerAddress: string;
+  model?: string;
+  nftOwner: string;
+  /** Native-A0GI flow fields */
+  executionId?: string;
+  paidA0GI?: string;
+  /** x402 flow fields */
+  payer?: string;
+  paidW0G?: string;
+  network?: string;
+  timestamp: number;
+}
+
+/** Result of re-verifying a receipt end-to-end. */
+export interface ReceiptVerification {
+  inputHashOk: boolean;
+  outputHashOk: boolean;
+  teeVerified: boolean;
+  /** All three checks must pass for a receipt to be considered valid. */
+  valid: boolean;
 }

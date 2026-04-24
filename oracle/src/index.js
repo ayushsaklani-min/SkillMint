@@ -50,48 +50,9 @@ async function initBroker() {
 
 // ─── Prompt loading ────────────────────────────────────────────────────────────
 
-async function loadSystemPrompt({ skill, metadata, skillId }) {
-  let meta = {};
-  try { meta = JSON.parse(metadata); } catch {}
-
-  if (meta.storageRoot && meta.iv) {
-    console.log(`  Encrypted prompt detected — downloading ${meta.storageRoot}`);
-    const tempPath = path.join(__dirname, `../temp/enc-${skillId}-${Date.now()}.json`);
-    fs.mkdirSync(path.dirname(tempPath), { recursive: true });
-    try {
-      const err = await indexer.download(meta.storageRoot, tempPath, true);
-      if (err) throw new Error(`storage download: ${err}`);
-      const payload = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
-      return decryptPrompt({
-        ciphertext: payload.ciphertext,
-        iv: payload.iv || meta.iv,
-        algo: payload.algo || meta.algo,
-      });
-    } finally {
-      try { fs.unlinkSync(tempPath); } catch {}
-    }
-  }
-
-  if (skill.promptHash && skill.promptHash !== ethers.ZeroHash) {
-    try {
-      const tempPath = path.join(__dirname, `../temp/prompt-${skillId}.json`);
-      fs.mkdirSync(path.dirname(tempPath), { recursive: true });
-      const err = await indexer.download(skill.promptHash, tempPath, true);
-      if (err) throw new Error(`storage download: ${err}`);
-      const promptData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
-      fs.unlinkSync(tempPath);
-      if (promptData.systemPrompt) return promptData.systemPrompt;
-    } catch (storageErr) {
-      console.warn(`  [warn] Legacy storage fallback failed: ${storageErr.message}`);
-    }
-  }
-
-  if (meta.systemPrompt) {
-    console.warn(`  [warn] Using legacy plaintext systemPrompt from metadata`);
-    return meta.systemPrompt;
-  }
-
-  throw new Error('No retrievable system prompt for this skill');
+import { loadSystemPrompt as _loadSystemPrompt } from './index-helpers.js';
+async function loadSystemPrompt(args) {
+  return _loadSystemPrompt({ ...args, indexer });
 }
 
 // ─── Execute a Skill ───────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { REGISTRY_ABI, ESCROW_ABI } from "./abis.js";
+import { REGISTRY_ABI, ESCROW_ABI, W0G_ABI } from "./abis.js";
 import { TESTNET, MAINNET } from "./constants.js";
 import type {
   NetworkConfig,
@@ -11,6 +11,12 @@ import type {
   ExecutionResult,
   Reputation,
   RevenueInfo,
+  PaymentPayload,
+  PaymentRequirements,
+  EIP3009Authorization,
+  X402ExecuteResult,
+  SkillReceipt,
+  ReceiptVerification,
 } from "./types.js";
 
 export class SkillMintClient {
@@ -18,6 +24,7 @@ export class SkillMintClient {
   readonly wallet: ethers.Wallet;
   readonly registry: ethers.Contract;
   readonly escrow: ethers.Contract;
+  readonly w0g: ethers.Contract;
   readonly network: NetworkConfig;
   readonly oracleUrl: string;
 
@@ -36,6 +43,7 @@ export class SkillMintClient {
     this.wallet = new ethers.Wallet(options.privateKey, this.provider);
     this.registry = new ethers.Contract(this.network.registry, REGISTRY_ABI, this.wallet);
     this.escrow = new ethers.Contract(this.network.escrow, ESCROW_ABI, this.wallet);
+    this.w0g = new ethers.Contract(this.network.w0g, W0G_ABI, this.wallet);
     this.oracleUrl = (options.oracleUrl || "https://oracle.skillmint-0g.xyz").replace(/\/$/, "");
   }
 
@@ -356,6 +364,201 @@ export class SkillMintClient {
   async getOwnedSkillCount(address?: string): Promise<number> {
     const addr = address || this.wallet.address;
     return Number(await this.registry.balanceOf(addr));
+  }
+
+  // ─── W0G (wrap / unwrap / balance) ─────────────────────────────────────────
+
+  /** W0G balance of an address (defaults to the SDK wallet), formatted. */
+  async getW0GBalance(address?: string): Promise<string> {
+    const addr = address || this.wallet.address;
+    const bal: bigint = await this.w0g.balanceOf(addr);
+    return ethers.formatEther(bal);
+  }
+
+  /** Wrap native A0GI → W0G. Amount is a human-readable string like "0.001". */
+  async wrapW0G(amount: string): Promise<string> {
+    const tx = await this.w0g.deposit({ value: ethers.parseEther(amount) });
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /** Unwrap W0G → native A0GI. Amount is a human-readable string. */
+  async unwrapW0G(amount: string): Promise<string> {
+    const tx = await this.w0g.withdraw(ethers.parseEther(amount));
+    await tx.wait();
+    return tx.hash;
+  }
+
+  // ─── x402 (pay-with-W0G HTTP skill endpoints) ──────────────────────────────
+
+  /**
+   * Sign an EIP-3009 transferWithAuthorization — the primitive x402 uses
+   * to pay a skill endpoint gaslessly for the user. Returns an x402 v1
+   * PaymentPayload ready for the X-PAYMENT header.
+   */
+  async signPaymentAuthorization(requirements: PaymentRequirements, opts?: { validBeforeSeconds?: number }): Promise<PaymentPayload> {
+    const asset = requirements.asset;
+    const assetName = requirements.extra?.name || "Wrapped 0G";
+    const assetVersion = requirements.extra?.version || "1";
+    const now = Math.floor(Date.now() / 1000);
+    const validBefore = now + (opts?.validBeforeSeconds ?? 600);
+    const nonce = ethers.hexlify(ethers.randomBytes(32));
+
+    const authorization: EIP3009Authorization = {
+      from: this.wallet.address,
+      to: requirements.payTo,
+      value: requirements.maxAmountRequired,
+      validAfter: "0",
+      validBefore: String(validBefore),
+      nonce,
+    };
+
+    const domain = {
+      name: assetName,
+      version: assetVersion,
+      chainId: BigInt(this.network.chainId),
+      verifyingContract: asset,
+    };
+    const types = {
+      TransferWithAuthorization: [
+        { name: "from",        type: "address" },
+        { name: "to",          type: "address" },
+        { name: "value",       type: "uint256" },
+        { name: "validAfter",  type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce",       type: "bytes32" },
+      ],
+    };
+    const signature = await this.wallet.signTypedData(domain, types, {
+      from: authorization.from,
+      to: authorization.to,
+      value: BigInt(authorization.value),
+      validAfter: BigInt(authorization.validAfter),
+      validBefore: BigInt(authorization.validBefore),
+      nonce: authorization.nonce,
+    });
+
+    return {
+      x402Version: 1,
+      scheme: "exact",
+      network: requirements.network,
+      payload: { signature, authorization },
+    };
+  }
+
+  /**
+   * Execute a skill via an x402-payable HTTP endpoint.
+   *
+   * Handles the full agent flow: probes for 402, ensures enough W0G,
+   * signs an EIP-3009 authorization, retries with X-PAYMENT, and returns
+   * the skill output + receipt root hash.
+   *
+   * @param x402Url   Base URL of the x402 skill server (e.g. https://x402.skillmint.xyz)
+   * @param skillId   Skill ID to run
+   * @param input     Raw input string for the skill
+   * @param opts.autoWrap  If true (default), automatically wrap native A0GI
+   *                        to cover any W0G shortfall.
+   */
+  async executeX402(
+    x402Url: string,
+    skillId: number,
+    input: string,
+    opts: { autoWrap?: boolean } = {}
+  ): Promise<X402ExecuteResult> {
+    const base = x402Url.replace(/\/$/, "");
+    const autoWrap = opts.autoWrap !== false;
+
+    // 1. Probe — expect 402 with paymentRequirements
+    const probe = await fetch(`${base}/skill/${skillId}/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+    if (probe.status !== 402) {
+      throw new Error(`x402 probe: expected 402, got ${probe.status} ${await probe.text()}`);
+    }
+    const challenge = (await probe.json()) as { accepts?: PaymentRequirements[] };
+    const requirements = challenge.accepts?.[0];
+    if (!requirements) throw new Error("x402 probe: no paymentRequirements in 402 body");
+    if (requirements.asset.toLowerCase() !== this.network.w0g.toLowerCase()) {
+      throw new Error(`x402 probe: asset ${requirements.asset} != SDK W0G ${this.network.w0g}`);
+    }
+
+    // 2. Ensure sufficient W0G
+    const need = BigInt(requirements.maxAmountRequired);
+    const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
+    if (bal < need) {
+      if (!autoWrap) {
+        throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+      }
+      const short = need - bal + ethers.parseEther("0.0005"); // small buffer
+      await this.wrapW0G(ethers.formatEther(short));
+    }
+
+    // 3. Sign + retry
+    const paymentPayload = await this.signPaymentAuthorization(requirements);
+    const header = Buffer.from(JSON.stringify(paymentPayload), "utf8").toString("base64");
+    const r = await fetch(`${base}/skill/${skillId}/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-payment": header },
+      body: JSON.stringify({ input }),
+    });
+    const body = (await r.json().catch(() => ({}))) as {
+      skillId?: number;
+      output?: string;
+      receiptRootHash?: string;
+      settlement?: { transaction: string; network: string; payer: string; blockNumber?: number };
+    };
+    if (r.status !== 200) {
+      throw new Error(`x402 execute: ${r.status} ${JSON.stringify(body)}`);
+    }
+
+    return {
+      skillId: Number(body.skillId ?? skillId),
+      output: body.output ?? "",
+      receiptRootHash: body.receiptRootHash ?? "",
+      settlement: body.settlement ?? { transaction: "", network: requirements.network, payer: this.wallet.address },
+      payer: body.settlement?.payer ?? this.wallet.address,
+      paidW0G: ethers.formatEther(need),
+    };
+  }
+
+  // ─── Receipts (fetch + verify) ─────────────────────────────────────────────
+
+  /**
+   * Download a receipt from 0G Storage via the network's indexer.
+   *
+   * Works against either a browser's fetch-based gateway or, in Node,
+   * shells out to `@0gfoundation/0g-ts-sdk` if installed. To keep this
+   * SDK dependency-light we use the indexer's HTTP file endpoint.
+   */
+  async fetchReceipt(rootHash: string): Promise<SkillReceipt> {
+    const url = `${this.network.storageIndexer.replace(/\/$/, "")}/file?root=${rootHash}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`fetchReceipt: ${r.status} ${await r.text()}`);
+    return (await r.json()) as SkillReceipt;
+  }
+
+  /**
+   * Recompute input/output hashes from the receipt contents and compare
+   * against the hashes the receipt itself commits to. Also surfaces the
+   * receipt's own `teeVerified` flag. All three must be true for a
+   * receipt to be considered valid.
+   */
+  verifyReceipt(receipt: SkillReceipt): ReceiptVerification {
+    const inputHashOk =
+      ethers.keccak256(ethers.toUtf8Bytes(receipt.input)).toLowerCase() ===
+      receipt.inputHash.toLowerCase();
+    const outputHashOk =
+      ethers.keccak256(ethers.toUtf8Bytes(receipt.output)).toLowerCase() ===
+      receipt.outputHash.toLowerCase();
+    const teeVerified = !!receipt.teeVerified;
+    return {
+      inputHashOk,
+      outputHashOk,
+      teeVerified,
+      valid: inputHashOk && outputHashOk && teeVerified,
+    };
   }
 
   // ─── Links ──────────────────────────────────────────────────────────────────

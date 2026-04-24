@@ -50,3 +50,34 @@ export const ESCROW_ABI = [
   "event ExecutionConfirmed(bytes32 indexed executionId, bytes32 receiptHash, address payee, uint256 payeeAmount, uint256 treasuryAmount)",
   "event ExecutionRefunded(bytes32 indexed executionId, address indexed agent, uint256 amount)",
 ] as const;
+
+// ─── W0G (Wrapped 0G, ERC-20 + EIP-3009) ───────────────────────────────────
+
+export const W0G_ABI = [
+  // ERC-20
+  "function balanceOf(address) view returns (uint256)",
+  "function totalSupply() view returns (uint256)",
+  "function transfer(address to, uint256 value) returns (bool)",
+  "function transferFrom(address from, address to, uint256 value) returns (bool)",
+  "function approve(address spender, uint256 value) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+
+  // Wrap / unwrap
+  "function deposit() payable",
+  "function withdraw(uint256 wad)",
+
+  // EIP-3009
+  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)",
+  "function receiveWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)",
+  "function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)",
+  "function authorizationState(address authorizer, bytes32 nonce) view returns (bool)",
+
+  // Events
+  "event Deposit(address indexed dst, uint256 wad)",
+  "event Withdrawal(address indexed src, uint256 wad)",
+  "event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)",
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+] as const;

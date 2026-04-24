@@ -1,0 +1,19 @@
+[Unit]
+Description=SkillMint x402 Facilitator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/skillmint/facilitator
+ExecStartPre=/opt/skillmint/facilitator/fetch-env.sh
+EnvironmentFile=/opt/skillmint/facilitator/.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/skillmint-facilitator.log
+StandardError=append:/var/log/skillmint-facilitator.log
+
+[Install]
+WantedBy=multi-user.target

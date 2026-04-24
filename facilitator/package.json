@@ -1,0 +1,16 @@
+{
+  "name": "skillmint-facilitator",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "e2e": "node test/e2e-testnet.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ethers": "^6.16.0",
+    "dotenv": "^16.0.0"
+  }
+}

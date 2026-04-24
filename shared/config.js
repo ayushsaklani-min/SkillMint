@@ -8,6 +8,7 @@ export const TESTNET = {
   contracts: {
     registry: '0xC4b41DA4FF0fcE60a6202864308983C23F3ea767',
     escrow: '0xF725E9cf83d49c5789235A38734b863a8ACfFd07',
+    w0g: '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D',
   },
 };
 
@@ -21,6 +22,7 @@ export const MAINNET = {
   contracts: {
     registry: '',
     escrow: '',
+    w0g: '0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c',
   },
 };
 

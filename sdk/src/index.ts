@@ -1,6 +1,6 @@
 export { SkillMintClient } from "./client.js";
 export { TESTNET, MAINNET } from "./constants.js";
-export { REGISTRY_ABI, ESCROW_ABI } from "./abis.js";
+export { REGISTRY_ABI, ESCROW_ABI, W0G_ABI } from "./abis.js";
 export type {
   NetworkConfig,
   Skill,
@@ -13,4 +13,10 @@ export type {
   RevenueInfo,
   ExecutionRequestedEvent,
   ExecutionConfirmedEvent,
+  EIP3009Authorization,
+  PaymentPayload,
+  PaymentRequirements,
+  X402ExecuteResult,
+  SkillReceipt,
+  ReceiptVerification,
 } from "./types.js";

@@ -1,0 +1,251 @@
+// Oracle x402 server — exposes skills as HTTP endpoints payable via x402.
+//
+// Flow:
+//   GET  /skill/:id                 → metadata
+//   POST /skill/:id/execute         → 402 Payment Required  (no X-PAYMENT)
+//   POST /skill/:id/execute         → run + receipt + settle (with X-PAYMENT)
+//
+// The facilitator (running on :3099 in tests, :3002 in prod) handles
+// EIP-3009 signature checks and on-chain settlement.
+//
+// Inference:
+//   MOCK_INFERENCE=1   → returns a stub output (fast local testing)
+//   otherwise          → initialises 0G Compute broker and runs real TEE
+//                        inference (same path as the escrow-based oracle).
+
+import 'dotenv/config';
+import express from 'express';
+import { ethers } from 'ethers';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { MemData, Indexer } from '@0gfoundation/0g-ts-sdk';
+import { hashInput, hashOutput } from '../../shared/hash.js';
+import { serializeReceipt } from '../../shared/receipt.js';
+import { decodePaymentHeader } from '../../facilitator/src/x402.js';
+import { loadSystemPrompt } from './index-helpers.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ─── Config ────────────────────────────────────────────────────────────────
+const NETWORK = process.env.NETWORK || '0g-testnet';
+const IS_TESTNET = NETWORK === '0g-testnet';
+const RPC_URL = IS_TESTNET ? 'https://evmrpc-testnet.0g.ai' : 'https://evmrpc.0g.ai';
+const INDEXER_URL = IS_TESTNET
+  ? 'https://indexer-storage-testnet-turbo.0g.ai'
+  : 'https://indexer-storage-turbo.0g.ai';
+const REGISTRY_ADDR = IS_TESTNET
+  ? '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'
+  : '';
+const W0G_ADDR = process.env.W0G_ADDRESS || (IS_TESTNET
+  ? '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D'
+  : '0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c');
+const FACILITATOR_URL = process.env.FACILITATOR_URL || 'http://127.0.0.1:3099';
+const PORT = Number(process.env.X402_PORT || 3003);
+const MOCK_INFERENCE = process.env.MOCK_INFERENCE === '1';
+const BASE_URL = process.env.X402_BASE_URL || `http://localhost:${PORT}`;
+
+const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistry.json'), 'utf8'));
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const registry = new ethers.Contract(REGISTRY_ADDR, REGISTRY_ABI, wallet);
+const indexer = new Indexer(INDEXER_URL);
+
+let broker = null;
+
+async function initBroker() {
+  if (MOCK_INFERENCE) { console.log('[x402] MOCK_INFERENCE=1 — skipping broker init'); return; }
+  const { createZGComputeNetworkBroker } = await import('@0glabs/0g-serving-broker');
+  console.log('[x402] Initialising 0G Compute broker …');
+  broker = await createZGComputeNetworkBroker(wallet);
+  console.log('[x402] Broker ready.');
+}
+
+// ─── Inference ─────────────────────────────────────────────────────────────
+async function runInference({ skill, input, skillId }) {
+  if (MOCK_INFERENCE) {
+    return {
+      output: `[mock] skill=${skill.computeProvider} model=${skill.model} input_len=${input.length}`,
+      chatID: 'mock-' + Date.now(),
+      teeVerified: true,
+      providerAddress: skill.computeProvider,
+      model: skill.model,
+    };
+  }
+
+  const systemPrompt = await loadSystemPrompt({
+    skill, metadata: skill.metadata, skillId, indexer,
+  });
+
+  const headers = await broker.inference.getRequestHeaders(skill.computeProvider);
+  const { endpoint } = await broker.inference.getServiceMetadata(skill.computeProvider);
+  const res = await fetch(`${endpoint}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: input }],
+      model: skill.model,
+    }),
+  });
+  if (!res.ok) throw new Error(`inference HTTP ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const output = data.choices?.[0]?.message?.content;
+  const chatID = res.headers.get('ZG-Res-Key') || data.id;
+  const teeVerified = await broker.inference.processResponse(skill.computeProvider, chatID);
+  return { output, chatID, teeVerified, providerAddress: skill.computeProvider, model: skill.model };
+}
+
+// ─── Skill lookup + pricing ────────────────────────────────────────────────
+async function getSkillRequirements(skillId) {
+  const skill = await registry.getSkill(skillId);
+  if (!skill.active) throw new Error(`skill ${skillId} is not active`);
+  const nftOwner = await registry.ownerOf(skillId);
+  // Price the skill in W0G at parity with its A0GI price
+  return { skill, nftOwner, priceW0G: skill.priceA0GI };
+}
+
+function buildPaymentRequirements({ skillId, priceW0G, nftOwner }) {
+  return {
+    scheme: 'exact',
+    network: NETWORK,
+    maxAmountRequired: priceW0G.toString(),
+    resource: `${BASE_URL}/skill/${skillId}/execute`,
+    description: `SkillMint skill #${skillId}`,
+    mimeType: 'application/json',
+    payTo: nftOwner,               // revenue goes directly to NFT owner
+    maxTimeoutSeconds: 300,
+    asset: W0G_ADDR,
+    extra: { name: 'Wrapped 0G', version: '1' },
+  };
+}
+
+// ─── HTTP ──────────────────────────────────────────────────────────────────
+const app = express();
+app.use(express.json({ limit: '1mb' }));
+
+app.get('/health', async (_req, res) => {
+  res.json({ ok: true, network: NETWORK, wallet: wallet.address, mockInference: MOCK_INFERENCE });
+});
+
+app.get('/skill/:id', async (req, res) => {
+  try {
+    const { skill, nftOwner, priceW0G } = await getSkillRequirements(req.params.id);
+    res.json({
+      skillId: Number(req.params.id),
+      model: skill.model,
+      priceW0G: priceW0G.toString(),
+      priceW0GFormatted: ethers.formatEther(priceW0G),
+      nftOwner,
+      active: skill.active,
+    });
+  } catch (e) {
+    res.status(404).json({ error: e.message });
+  }
+});
+
+app.post('/skill/:id/execute', async (req, res) => {
+  const skillId = req.params.id;
+  let skillInfo;
+  try {
+    skillInfo = await getSkillRequirements(skillId);
+  } catch (e) {
+    return res.status(404).json({ error: e.message });
+  }
+  const paymentRequirements = buildPaymentRequirements({ skillId, ...skillInfo });
+
+  const paymentHeader = req.get('x-payment');
+  if (!paymentHeader) {
+    return res.status(402).json({
+      x402Version: 1,
+      accepts: [paymentRequirements],
+      error: 'X-PAYMENT header required',
+    });
+  }
+
+  let paymentPayload;
+  try {
+    paymentPayload = decodePaymentHeader(paymentHeader);
+  } catch (e) {
+    return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `invalid X-PAYMENT: ${e.message}` });
+  }
+
+  const { input } = req.body || {};
+  if (typeof input !== 'string' || input.length === 0) {
+    return res.status(400).json({ error: 'body.input required (non-empty string)' });
+  }
+
+  try {
+    // 1. Verify payment through facilitator
+    const vr = await fetch(`${FACILITATOR_URL}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paymentPayload, paymentRequirements }),
+    }).then(r => r.json());
+    if (!vr.isValid) {
+      return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `verify: ${vr.invalidReason}` });
+    }
+
+    // 2. Run inference
+    const inf = await runInference({ skill: skillInfo.skill, input, skillId });
+
+    // 3. Build + upload receipt to 0G Storage
+    const receipt = {
+      skillId: Number(skillId),
+      input,
+      inputHash: hashInput(input),
+      outputHash: hashOutput(inf.output),
+      chatID: inf.chatID,
+      teeVerified: inf.teeVerified,
+      providerAddress: inf.providerAddress,
+      model: inf.model,
+      nftOwner: skillInfo.nftOwner,
+      payer: vr.payer,
+      paidW0G: ethers.formatEther(skillInfo.priceW0G),
+      network: NETWORK,
+      timestamp: Date.now(),
+      output: inf.output,
+    };
+    const bytes = new TextEncoder().encode(serializeReceipt(receipt));
+    const memData = new MemData(bytes);
+    const [tree, treeErr] = await memData.merkleTree();
+    if (treeErr) throw new Error(`merkle: ${treeErr}`);
+    const receiptRootHash = tree.rootHash();
+    const [, uploadErr] = await indexer.upload(memData, RPC_URL, wallet);
+    if (uploadErr) throw new Error(`upload: ${uploadErr}`);
+
+    // 4. Settle W0G via facilitator
+    const sr = await fetch(`${FACILITATOR_URL}/settle`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paymentPayload, paymentRequirements }),
+    }).then(r => r.json());
+    if (!sr.success) {
+      // We've already run inference — return the result but flag the settle failure.
+      return res.status(502).json({ error: `settle failed after inference: ${sr.error}`, receipt, receiptRootHash });
+    }
+
+    res.set('X-PAYMENT-RESPONSE', Buffer.from(JSON.stringify(sr), 'utf8').toString('base64'));
+    res.json({
+      ok: true,
+      skillId: Number(skillId),
+      output: inf.output,
+      receiptRootHash,
+      settlement: sr,
+    });
+  } catch (e) {
+    console.error('[x402] execute error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Boot ──────────────────────────────────────────────────────────────────
+export async function startX402Server() {
+  await initBroker();
+  return app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[x402] oracle listening on :${PORT} network=${NETWORK} w0g=${W0G_ADDR} facilitator=${FACILITATOR_URL} mock=${MOCK_INFERENCE}`);
+  });
+}
+
+if (process.argv[1] && process.argv[1].endsWith('x402-server.js')) {
+  startX402Server();
+}
