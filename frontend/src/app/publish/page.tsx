@@ -5,7 +5,7 @@ import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI } from "@/lib/contracts";
-import { hashPrompt } from "../../../../shared/hash.js";
+import { hashPrompt } from "@/lib/hash";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
