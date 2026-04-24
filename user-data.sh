@@ -1,9 +1,13 @@
 #!/bin/bash
+# SkillMint Oracle EC2 bootstrap. Secrets live in AWS SSM (Parameter Store) —
+# never in source. Instance must have an IAM role allowing:
+#   ssm:GetParameter on /skillmint/oracle/*
+#   kms:Decrypt on the default SSM key (via kms:ViaService condition)
 set -e
 exec > >(tee /var/log/oracle-bootstrap.log) 2>&1
 
-# Install git + Node 22
-dnf install -y git
+# Install git + Node 22 + aws cli (aws is preinstalled on Amazon Linux 2023 but be explicit)
+dnf install -y git awscli
 curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
 dnf install -y nodejs
 
@@ -12,38 +16,28 @@ cd /opt
 git clone https://github.com/ayushsaklani-min/SkillMint.git skillmint
 cd skillmint/oracle
 
-# Install deps
 npm install --omit=dev --legacy-peer-deps
+npm install --omit=dev --legacy-peer-deps --prefix ../shared
 
-# Generate a fresh AES-256 key for prompt encryption if we don't have one
-if [ -z "$ORACLE_KEY" ]; then
-  ORACLE_KEY=$(openssl rand -hex 32)
-fi
+# Install the fetch-env hook
+install -o root -g root -m 755 fetch-env.sh /opt/skillmint/oracle/fetch-env.sh
 
-# Write env — keep PRIVATE_KEY and ORACLE_KEY out of git
-cat > /opt/skillmint/oracle/.env <<EOF
-PRIVATE_KEY=REDACTED_FROM_SSM
-NETWORK=testnet
-ORACLE_KEY=${ORACLE_KEY}
-ORACLE_KEY_ID=oracle-v1
-ORACLE_API_PORT=3001
-EOF
-chmod 600 /opt/skillmint/oracle/.env
-
-# Open the HTTP port for the frontend proxy to reach us
+# Open the HTTP port for the frontend proxy
 firewall-cmd --permanent --add-port=3001/tcp 2>/dev/null || true
 firewall-cmd --reload 2>/dev/null || true
 
-# systemd unit
+# systemd unit — ExecStartPre pulls fresh secrets from SSM on every start
 cat > /etc/systemd/system/skillmint-oracle.service <<'EOF'
 [Unit]
 Description=SkillMint Oracle
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/skillmint/oracle
+ExecStartPre=/opt/skillmint/oracle/fetch-env.sh
 EnvironmentFile=/opt/skillmint/oracle/.env
 ExecStart=/usr/bin/node src/index.js
 Restart=always
