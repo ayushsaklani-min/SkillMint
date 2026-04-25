@@ -161,13 +161,16 @@ A runnable end-to-end agent example lives at [`sdk/examples/agent-run.mjs`](sdk/
 
 ## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
+> **Status:** ![Testnet](https://img.shields.io/badge/TESTNET-LIVE-20C20E?style=flat-square&labelColor=000000) · ![Mainnet](https://img.shields.io/badge/0G_MAINNET-NEXT-D4FF00?style=flat-square&labelColor=000000) — actively running on 0G Galileo Testnet. Mainnet contracts deploy as the next milestone.
+
 | Component | Where |
 |-----------|-------|
 | **Frontend** | [`skillmint-0g.vercel.app`](https://skillmint-0g.vercel.app) · Vercel |
-| **Oracle** | AWS EC2 · `ap-south-1` · systemd |
+| **Oracle / Facilitator / x402 server** | AWS EC2 · `ap-south-1` · systemd |
 | **SkillRegistryV2** | `0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4) |
 | **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
-| **Network** | 0G Galileo Testnet · Chain ID `16602` |
+| **W0G** (Wrapped 0G · EIP-3009) | `0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D) |
+| **Network** | 0G Galileo Testnet · Chain ID `16602` (mainnet `16661` next) |
 
 ## ![DESIGN](https://img.shields.io/badge/🎨-DESIGN-0038FF?style=for-the-badge&labelColor=000000)
 
