@@ -686,6 +686,133 @@ export default function HomePage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
+         AGENT SDK — for builders / agents
+         ═══════════════════════════════════════════════════════════════ */}
+      <section className="relative bg-black text-white border-y-2 border-black overflow-hidden">
+        <div className="grid-bg-brutal">
+          <div className="mx-auto max-w-7xl px-6 py-20 sm:py-28">
+            <FadeIn className="text-center mb-14">
+              <div className="inline-flex items-center gap-2 bg-[#D4FF00] text-black font-mono text-xs font-bold tracking-widest px-3 py-1.5 border-2 border-[#D4FF00] rounded-full mb-5">
+                <span className="w-1.5 h-1.5 rounded-full bg-black" />
+                FOR AGENTS · BUILDERS
+              </div>
+              <h2 className="font-display text-4xl sm:text-6xl text-white text-3d leading-[0.95]">
+                PLUG IN.<br />
+                <span className="text-[#D4FF00] text-3d-lime">EARN AUTOMATICALLY.</span>
+              </h2>
+              <p className="mt-6 text-white/80 text-base sm:text-lg max-w-2xl mx-auto">
+                The TypeScript SDK any agent uses to discover skills, pay with W0G via x402, run TEE-attested inference, and verify receipts. Zero URL config.
+              </p>
+            </FadeIn>
+
+            <div className="grid md:grid-cols-[1fr_1.2fr] gap-8 items-stretch">
+              {/* ── Left: pitch + CTAs ── */}
+              <FadeIn>
+                <div className="bg-white text-black border-2 border-black rounded-3xl shadow-brutal-lg p-7 sm:p-9 h-full flex flex-col">
+                  <div className="font-mono text-xs font-bold tracking-widest text-black/60 mb-3">
+                    npm i @skillmint/sdk
+                  </div>
+                  <h3 className="font-display text-3xl sm:text-4xl leading-[0.95] mb-5">
+                    BUILD AGENTS<br/>
+                    THAT <span className="text-[#0038FF]">SHIP.</span>
+                  </h3>
+
+                  <ul className="space-y-3 mb-7 text-sm">
+                    {[
+                      "listSkills, resolveSkill, searchSkills",
+                      "executeX402 — pay with W0G, no gas for the agent",
+                      "fetchReceipt + verifyReceipt — TEE proof in one call",
+                      "registerSkill — mint your own skill NFT",
+                    ].map((line) => (
+                      <li key={line} className="flex items-start gap-2.5">
+                        <span className="mt-1 inline-block w-3 h-3 bg-[#D4FF00] border-2 border-black rounded-sm shrink-0" />
+                        <span className="font-mono text-[13px] text-black/85">{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-auto flex flex-wrap gap-3">
+                    <Link
+                      href="https://github.com/ayushsaklani-min/SkillMint#agent-sdk"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-[#D4FF00] text-black font-display text-sm px-5 py-3 border-2 border-black rounded-full shadow-brutal btn-brutal"
+                    >
+                      READ THE DOCS →
+                    </Link>
+                    <Link
+                      href="https://github.com/ayushsaklani-min/SkillMint/tree/master/sdk"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-white text-black font-display text-sm px-5 py-3 border-2 border-black rounded-full shadow-brutal btn-brutal"
+                    >
+                      VIEW SOURCE
+                    </Link>
+                  </div>
+                </div>
+              </FadeIn>
+
+              {/* ── Right: brutalist code window ── */}
+              <FadeIn delay={0.1}>
+                <div className="bg-[#0a0a0a] text-white border-2 border-black rounded-3xl shadow-brutal-lg overflow-hidden h-full flex flex-col">
+                  {/* window chrome */}
+                  <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/10 bg-[#1a1a1a]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-[#FF5F57] border border-black/40" />
+                      <span className="w-3 h-3 rounded-full bg-[#FEBC2E] border border-black/40" />
+                      <span className="w-3 h-3 rounded-full bg-[#28C840] border border-black/40" />
+                    </div>
+                    <span className="font-mono text-[10px] tracking-widest text-white/60">
+                      agent-run.ts
+                    </span>
+                    <span className="font-mono text-[10px] tracking-widest text-[#D4FF00]">
+                      ● LIVE
+                    </span>
+                  </div>
+
+                  {/* code */}
+                  <pre className="px-5 sm:px-7 py-6 sm:py-7 text-[12px] sm:text-[13px] leading-relaxed font-mono overflow-x-auto flex-1">
+<code><span className="text-white/40">{`// agent flow — zero URL config`}</span>
+<span className="text-[#FF5F57]">{`import`}</span>{` { SkillMintClient } `}<span className="text-[#FF5F57]">{`from`}</span>{` `}<span className="text-[#D4FF00]">{`"@skillmint/sdk"`}</span>{`;
+
+`}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
+  privateKey: process.env.PRIVATE_KEY!,
+  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
+});
+
+`}<span className="text-white/40">{`// 1. discover`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` skills = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`listSkills`}</span>{`();
+
+`}<span className="text-white/40">{`// 2. pay + run inside the TEE`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` r = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`executeX402`}</span>{`(
+  `}<span className="text-[#D4FF00]">{`15`}</span>{`, `}<span className="text-[#D4FF00]">{`"summarize ..."`}</span>{`,
+);
+console.log(r.output);
+console.log(r.settlement.transaction);
+
+`}<span className="text-white/40">{`// 3. verify the receipt — anyone can`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` rec = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`fetchReceipt`}</span>{`(r.receiptRootHash);
+client.`}<span className="text-[#28C840]">{`verifyReceipt`}</span>{`(rec);
+`}<span className="text-white/40">{`// → { valid: true, teeVerified: true }`}</span></code>
+                  </pre>
+
+                  {/* footer pill */}
+                  <div className="border-t-2 border-white/10 px-5 py-3 flex items-center justify-between bg-[#1a1a1a]">
+                    <span className="font-mono text-[10px] tracking-widest text-white/60">
+                      ETHERS V6 · NODE 20+
+                    </span>
+                    <span className="bg-[#D4FF00] text-black font-mono text-[10px] font-bold tracking-widest px-2 py-1 border-2 border-black rounded-full">
+                      v0.2.1
+                    </span>
+                  </div>
+                </div>
+              </FadeIn>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
          BIG CTA
          ═══════════════════════════════════════════════════════════════ */}
       <section className="relative py-24 sm:py-32 grid-bg-brutal">
