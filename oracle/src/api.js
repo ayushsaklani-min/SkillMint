@@ -5,6 +5,8 @@ import { MemData } from '@0gfoundation/0g-ts-sdk';
 import { createRateLimiter } from './ratelimit.js';
 
 const PORT = Number(process.env.ORACLE_API_PORT || 3001);
+const X402_URL = process.env.X402_BASE_URL || `http://localhost:${process.env.X402_PORT || 3003}`;
+const FACILITATOR_URL = process.env.FACILITATOR_URL || 'http://127.0.0.1:3002';
 const rateLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
 
 function clientIp(req) {
@@ -56,6 +58,107 @@ export function startApi({ indexer, wallet, rpcUrl, registry }) {
         });
       } catch (e) {
         return send(res, 503, { ok: false, wallet: wallet.address, error: e.message });
+      }
+    }
+
+    if (req.method === 'GET' && req.url === '/probe') {
+      // Synthetic E2E probe: walks the user-facing surfaces (oracle API,
+      // facilitator, x402 challenge) to catch regressions /health misses.
+      // No on-chain tx, no W0G burned. Returns 503 with the failing stage.
+      const t0 = Date.now();
+      const stages = [];
+      const stage = async (name, fn) => {
+        const s = Date.now();
+        try {
+          const r = await fn();
+          stages.push({ name, ok: true, ms: Date.now() - s });
+          return r;
+        } catch (e) {
+          stages.push({ name, ok: false, ms: Date.now() - s, error: e.message });
+          throw new Error(`${name}: ${e.message}`);
+        }
+      };
+
+      try {
+        const block = await stage('rpc', () => wallet.provider.getBlockNumber());
+
+        const skillCount = await stage('registry', async () => {
+          if (!registry) throw new Error('registry not configured');
+          const n = Number(await registry.skillCount());
+          if (n === 0) throw new Error('skillCount is 0');
+          return n;
+        });
+
+        const skillId = await stage('find-active-skill', async () => {
+          const start = Math.max(1, skillCount - 49);
+          for (let i = skillCount; i >= start; i--) {
+            try {
+              const s = await registry.getSkill(i);
+              if (s.active) return i;
+            } catch { /* skip */ }
+          }
+          throw new Error(`no active skill in last 50 (count=${skillCount})`);
+        });
+
+        await stage('oracle-input-post', async () => {
+          const probeId = '0xprobe' + Date.now().toString(16).padStart(58, '0');
+          const r = await fetch(`http://127.0.0.1:${PORT}/input`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ executionId: probeId, input: 'probe' }),
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j = await r.json();
+          if (!j.ok) throw new Error(`unexpected body: ${JSON.stringify(j)}`);
+        });
+
+        await stage('facilitator-supported', async () => {
+          const r = await fetch(`${FACILITATOR_URL}/supported`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j = await r.json();
+          if (!Array.isArray(j.kinds) || j.kinds.length === 0) throw new Error('empty kinds');
+        });
+
+        await stage('facilitator-health', async () => {
+          const r = await fetch(`${FACILITATOR_URL}/health`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        });
+
+        const challenge = await stage('x402-challenge', async () => {
+          const r = await fetch(`${X402_URL}/skill/${skillId}/execute`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ input: 'probe' }),
+          });
+          if (r.status !== 402) throw new Error(`expected 402, got ${r.status}`);
+          const j = await r.json();
+          if (j.x402Version !== 1) throw new Error(`bad x402Version=${j.x402Version}`);
+          if (!Array.isArray(j.accepts) || j.accepts.length === 0) throw new Error('empty accepts');
+          const a = j.accepts[0];
+          for (const k of ['scheme', 'network', 'maxAmountRequired', 'resource', 'payTo', 'asset', 'extra']) {
+            if (a[k] === undefined || a[k] === null || a[k] === '') {
+              throw new Error(`accepts[0] missing ${k}`);
+            }
+          }
+          return { scheme: a.scheme, network: a.network, asset: a.asset, payTo: a.payTo, maxAmountRequired: a.maxAmountRequired };
+        });
+
+        return send(res, 200, {
+          ok: true,
+          totalMs: Date.now() - t0,
+          block,
+          skillCount,
+          probedSkillId: skillId,
+          challenge,
+          stages,
+        });
+      } catch (e) {
+        return send(res, 503, {
+          ok: false,
+          totalMs: Date.now() - t0,
+          error: e.message,
+          stages,
+        });
       }
     }
 
