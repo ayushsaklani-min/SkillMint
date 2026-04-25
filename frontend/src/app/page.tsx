@@ -274,7 +274,7 @@ export default function HomePage() {
           <FadeIn className="flex justify-center mb-8">
             <div className="flex items-center gap-2 bg-black text-[#D4FF00] font-mono text-xs font-bold px-4 py-2 border-2 border-black rounded-full">
               <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse-dot" />
-              LIVE ON 0G GALILEO TESTNET
+              TESTNET LIVE · MAINNET NEXT
             </div>
           </FadeIn>
 
