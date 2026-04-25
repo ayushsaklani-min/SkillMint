@@ -81,7 +81,7 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 | **`contracts/`**   | `SkillRegistryV2` (ERC-721 + ERC-2981) · `SkillEscrowV2` (PullPayment) |
 | **`oracle/`**      | Event watcher → 0G Compute TEE → receipt on 0G Storage → on-chain confirm |
 | **`frontend/`**    | Next.js 16 · neo-brutalist UI · ethers.js · scroll-driven explainer    |
-| **`sdk/`**         | TypeScript SDK — `publishSkill` · `executeSkill` · `verifyExecution`   |
+| **`sdk/`**         | TypeScript SDK · `@skillmint/sdk` — `listSkills` · `executeX402` · `verifyReceipt` · `registerSkill` |
 | **`skills/`**      | Seed skill registry + `register-all.js` bootstrap                      |
 | **`shared/`**      | ABIs + network config (testnet ↔ mainnet)                              |
 | **`tee-sandbox/`** | Standalone TEE compute test harness                                    |
@@ -111,6 +111,53 @@ cd contracts && npm install && npx hardhat test
 # Deploy to 0G Galileo
 cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
 ```
+
+## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
+
+**`@skillmint/sdk`** — TypeScript client for agents. Discover skills, pay with W0G via [x402](https://x402.org), run TEE-attested inference, verify receipts. Defaults point at the live Vercel-proxied backend, so no URL configuration is required.
+
+```bash
+npm install @skillmint/sdk ethers
+```
+
+```typescript
+import { SkillMintClient } from "@skillmint/sdk";
+
+const client = new SkillMintClient({
+  privateKey: process.env.PRIVATE_KEY!,
+  network: "testnet",
+});
+
+// 1. Discover
+const skills = await client.listSkills();
+
+// 2. Execute via x402 — auto-wraps native 0G into W0G if balance is short,
+//    signs an EIP-3009 authorization, settles on-chain, returns the output.
+const result = await client.executeX402(
+  15,                                                  // skillId
+  "pragma solidity ^0.8.0; contract A { /* ... */ }"   // input
+);
+console.log(result.output);
+console.log("settle tx :", result.settlement.transaction);
+console.log("receipt   :", result.receiptRootHash);
+
+// 3. Verify the receipt — anyone can. Recomputes input/output hashes,
+//    checks the TEE-attestation flag from inside the enclave.
+const receipt = await client.fetchReceipt(result.receiptRootHash);
+const v = client.verifyReceipt(receipt);
+// → { valid: true, inputHashOk: true, outputHashOk: true, teeVerified: true }
+```
+
+| Surface       | Methods |
+|---------------|---------|
+| **Discovery** | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` · `getReputation` |
+| **Execute**   | `executeX402` (x402 + W0G) · `executeAndWait` (native escrow) · `getExecutionOutcome` |
+| **W0G**       | `wrapW0G` · `unwrapW0G` · `getW0GBalance` |
+| **Receipts**  | `fetchReceipt` · `verifyReceipt` |
+| **Publish**   | `registerSkill` — mints the NFT, encrypts the prompt to 0G Storage |
+| **Owner**     | `updatePrice` · `deactivateSkill` · `transferSkill` · `withdrawRevenue` |
+
+A runnable end-to-end agent example lives at [`sdk/examples/agent-run.mjs`](sdk/examples/agent-run.mjs) — discovers skills, picks one, pays via x402, verifies the receipt. Zero URL overrides.
 
 ## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
