@@ -6,6 +6,8 @@ export const TESTNET = {
   storageIndexer: "https://indexer-storage-testnet-turbo.0g.ai",
   registry: "0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4",
   escrow: "0xe2841b105B695610f2c1194f8865474A536184dB",
+  w0g: "0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D",
+  x402Network: "0g-testnet",
 };
 
 export const MAINNET = {
@@ -16,9 +18,17 @@ export const MAINNET = {
   storageIndexer: "https://indexer-storage-turbo.0g.ai",
   registry: "",
   escrow: "",
+  w0g: "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c",
+  x402Network: "0g-mainnet",
 };
 
 export const NETWORK = TESTNET;
+
+// ─── Agent-skill sentinels (matches sdk/src/types.ts) ────────────────────
+// Contract requires non-zero computeProvider + non-empty model. Agent-skills
+// use these stable sentinels so SDK + frontend can filter on them.
+export const AGENT_SKILL_PROVIDER = "0x0000000000000000000000000000000000000a6e";
+export const AGENT_SKILL_MODEL = "agent-skill";
 
 // ─── SkillRegistryV2 (ERC-721 NFT) ───────────────────────────────────────
 export const REGISTRY_ABI = [
@@ -40,6 +50,16 @@ export const REGISTRY_ABI = [
   "event SkillMinted(uint256 indexed skillId, address indexed developer, bytes32 promptHash, string model, uint256 price)",
   "event SkillTransferred(uint256 indexed skillId, address indexed from, address indexed to)",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+];
+
+// ─── W0G (Wrapped 0G · ERC-20 + EIP-3009) ────────────────────────────────
+export const W0G_ABI = [
+  "function deposit() payable",
+  "function withdraw(uint256 wad)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function name() view returns (string)",
+  "function version() view returns (string)",
 ];
 
 // ─── SkillEscrowV2 (PullPayment + payee snapshot) ────────────────────────

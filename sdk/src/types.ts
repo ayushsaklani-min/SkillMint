@@ -236,11 +236,73 @@ export interface SkillReceipt {
   timestamp: number;
 }
 
-/** Result of re-verifying a receipt end-to-end. */
+/** Result of re-verifying a prompt-skill receipt end-to-end. */
 export interface ReceiptVerification {
+  kind?: "prompt";
   inputHashOk: boolean;
   outputHashOk: boolean;
   teeVerified: boolean;
   /** All three checks must pass for a receipt to be considered valid. */
+  valid: boolean;
+}
+
+// ─── Agent skills (folder-bundle x402 flow) ────────────────────────────────
+
+/** Sentinel `computeProvider` used by agent-skill NFTs. */
+export const AGENT_SKILL_PROVIDER = "0x0000000000000000000000000000000000000a6e";
+export const AGENT_SKILL_MODEL = "agent-skill";
+
+/** Metadata JSON shape stored on-chain for an agent-skill (parsed from `Skill.metadata`). */
+export interface AgentSkillMetadata extends SkillMetadata {
+  kind: "agent-skill";
+  bundleStorageRoot: string;
+  bundleIv: string;
+  bundleAlgo: "aes-256-gcm";
+  bundleSha256: string;
+  sizeBytes: number;
+  manifest: string[];
+  format?: "claude-skill";
+  compatibleWith?: string[];
+}
+
+export interface RegisterAgentSkillResult {
+  skillId: number;
+  txHash: string;
+  bundleStorageRoot: string;
+  bundleSha256: string;
+}
+
+export interface DownloadAgentSkillResult {
+  skillId: number;
+  /** Decrypted, sha256-verified bundle bytes (the original ZIP). */
+  bundle: Buffer;
+  manifest: string[];
+  sizeBytes: number;
+  bundleSha256: string;
+  receiptRootHash: string;
+  settlement: { transaction: string; network: string; payer: string; blockNumber?: number };
+  payer: string;
+  paidW0G: string;
+}
+
+/** Receipt body uploaded to 0G Storage when an agent-skill is downloaded. */
+export interface AgentSkillReceipt {
+  skillId: number;
+  kind: "agent-skill";
+  payer: string;
+  paidW0G: string;
+  network: string;
+  bundleStorageRoot: string;
+  bundleSha256: string;
+  manifest: string[];
+  sizeBytes: number;
+  nftOwner: string;
+  timestamp: number;
+}
+
+export interface AgentSkillReceiptVerification {
+  kind: "agent-skill";
+  /** sha256 of the bundle the caller passed matches the receipt's commitment. */
+  sha256Ok: boolean;
   valid: boolean;
 }

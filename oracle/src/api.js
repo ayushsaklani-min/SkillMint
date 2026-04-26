@@ -1,8 +1,10 @@
 import http from 'node:http';
-import { encryptPrompt } from './crypto.js';
+import Busboy from 'busboy';
+import { encryptPrompt, encryptBuffer } from './crypto.js';
 import { putInput } from './store.js';
 import { MemData } from '@0gfoundation/0g-ts-sdk';
 import { createRateLimiter } from './ratelimit.js';
+import { validateBundle, sha256Hex, MAX_BUNDLE_BYTES } from './agent-skill-bundle.js';
 
 const PORT = Number(process.env.ORACLE_API_PORT || 3001);
 const X402_URL = process.env.X402_BASE_URL || `http://localhost:${process.env.X402_PORT || 3003}`;
@@ -34,6 +36,57 @@ async function readJson(req) {
       catch (e) { reject(e); }
     });
     req.on('error', reject);
+  });
+}
+
+/**
+ * Parse a multipart/form-data request and return {
+ *   bundle: Buffer,
+ *   fields: Record<string,string>
+ * }. Accepts a single file field named "bundle". Hard-caps body size
+ * at MAX_BUNDLE_BYTES + 64 KB slop for headers/other fields.
+ */
+async function readBundleMultipart(req) {
+  return new Promise((resolve, reject) => {
+    let bb;
+    try {
+      bb = Busboy({
+        headers: req.headers,
+        limits: {
+          fileSize: MAX_BUNDLE_BYTES,
+          files: 1,
+          fields: 5,
+        },
+      });
+    } catch (e) {
+      reject(new Error(`bad multipart: ${e.message}`));
+      return;
+    }
+
+    const chunks = [];
+    const fields = {};
+    let sawBundleField = false;
+    let truncated = false;
+
+    bb.on('field', (name, val) => { fields[name] = val; });
+    bb.on('file', (name, stream, info) => {
+      if (name !== 'bundle') {
+        stream.resume(); // discard unknown file fields
+        return;
+      }
+      sawBundleField = true;
+      stream.on('data', c => chunks.push(c));
+      stream.on('limit', () => { truncated = true; });
+      stream.on('end', () => {});
+    });
+    bb.on('error', reject);
+    bb.on('close', () => {
+      if (!sawBundleField) return reject(new Error('multipart missing required "bundle" file field'));
+      if (truncated) return reject(new Error(`bundle exceeds ${MAX_BUNDLE_BYTES} byte limit`));
+      resolve({ bundle: Buffer.concat(chunks), fields });
+    });
+
+    req.pipe(bb);
   });
 }
 
@@ -203,6 +256,44 @@ export function startApi({ indexer, wallet, rpcUrl, registry }) {
       } catch (e) {
         console.error('[api] /encrypt-prompt error:', e.message);
         return send(res, 500, { error: e.message });
+      }
+    }
+
+    if (req.method === 'POST' && req.url === '/encrypt-bundle') {
+      try {
+        const { bundle } = await readBundleMultipart(req);
+        // Validate first — cheap, surfaces client errors before we hit storage.
+        const { manifest, sizeBytes } = validateBundle(bundle);
+        const sha256 = sha256Hex(bundle);
+
+        // Encrypt the raw zip bytes; ciphertext is what lands in 0G Storage.
+        const enc = encryptBuffer(bundle);
+        const memData = new MemData(enc.ciphertext);
+        const [tree, treeErr] = await memData.merkleTree();
+        if (treeErr) throw new Error(`merkle: ${treeErr}`);
+        const storageRoot = tree.rootHash();
+        const [, uploadErr] = await indexer.upload(memData, rpcUrl, wallet);
+        if (uploadErr) throw new Error(`upload: ${uploadErr}`);
+
+        console.log(`[api] encrypted bundle → ${storageRoot} (${sizeBytes} B, sha256=${sha256.slice(0, 18)}…)`);
+        return send(res, 200, {
+          storageRoot,
+          iv: enc.iv,
+          algo: enc.algo,
+          keyId: enc.keyId,
+          sha256,
+          manifest,
+          sizeBytes,
+        });
+      } catch (e) {
+        // Validation errors are user-actionable → 400; anything else is 500.
+        const userErrPatterns = [
+          'bundle ', 'multipart', 'missing required', 'too large', 'not a valid ZIP',
+        ];
+        const isUser = userErrPatterns.some(p => e.message.includes(p));
+        const status = isUser ? 400 : 500;
+        if (!isUser) console.error('[api] /encrypt-bundle error:', e);
+        return send(res, status, { error: e.message });
       }
     }
 

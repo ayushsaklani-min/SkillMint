@@ -1,7 +1,7 @@
 {
   "name": "@skillmint/sdk",
-  "version": "0.2.1",
-  "description": "SDK for agents to discover, execute, pay (x402 + W0G), and verify AI skills on SkillMint (0G Chain)",
+  "version": "0.3.0",
+  "description": "SDK for agents to discover, execute, pay (x402 + W0G), and verify AI skills on SkillMint (0G Chain). Supports prompt skills (TEE-attested inference) and agent skills (Claude/Codex folder bundles).",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,11 +30,13 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "ethers": "^6.13.0"
+    "adm-zip": "^0.5.17",
+    "ethers": "^6.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "@types/node": "^20.0.0"
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
   },
   "peerDependencies": {
     "ethers": "^6.0.0"

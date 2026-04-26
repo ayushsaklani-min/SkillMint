@@ -7,11 +7,15 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { hashInput } from "@/lib/hash";
+import { downloadAgentSkillBrowser, downloadBytes } from "@/lib/x402";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
+type SkillKind = "prompt" | "agent-skill";
+
 interface SkillOption {
   id: number;
+  kind: SkillKind;
   name: string;
   description: string;
   model: string;
@@ -20,6 +24,7 @@ interface SkillOption {
   active: boolean;
   owner: string;
   reputation: number;
+  manifestCount?: number;
 }
 
 type ExecutionPhase =
@@ -69,6 +74,38 @@ function ExecuteContent() {
   const [walletAddr, setWalletAddr] = useState("");
   const [receiptData, setReceiptData] = useState<Record<string, unknown> | null>(null);
 
+  const [bundleState, setBundleState] = useState<"idle" | "buying" | "done">("idle");
+  const [bundleErr, setBundleErr] = useState("");
+  const [bundleResult, setBundleResult] = useState<{ tx: string; receiptRoot: string; sha256: string; size: number; manifestLen: number } | null>(null);
+
+  async function handleAgentSkillBuy() {
+    const s = skills.find((x) => x.id === selectedSkill);
+    if (!s) return;
+    setBundleState("buying"); setBundleErr(""); setBundleResult(null);
+    try {
+      if (!window.ethereum) throw new Error("MetaMask not found");
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: `0x${NETWORK.chainId.toString(16)}` }],
+      }).catch(() => {});
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+      const dl = await downloadAgentSkillBrowser(provider, s.id);
+      downloadBytes(dl.bundle, `${s.name || `skill-${s.id}`}.skill`);
+      setBundleResult({
+        tx: dl.settlement.transaction,
+        receiptRoot: dl.receiptRootHash,
+        sha256: dl.bundleSha256,
+        size: dl.bundle.length,
+        manifestLen: dl.manifest.length,
+      });
+      setBundleState("done");
+    } catch (e) {
+      setBundleErr(e instanceof Error ? e.message : "download failed");
+      setBundleState("idle");
+    }
+  }
+
   useEffect(() => { loadSkills(); }, []);
 
   async function loadSkills() {
@@ -81,10 +118,12 @@ function ExecuteContent() {
         const skill = await registry.getSkill(i);
         const [, , rate] = await registry.getReputationScore(i);
         const owner = await registry.ownerOf(i);
-        let meta: { name?: string; description?: string } = {};
-        try { meta = JSON.parse(skill.metadata); } catch {}
+        let meta: { name?: string; description?: string; kind?: SkillKind; manifest?: string[] } = {};
+        try { meta = JSON.parse(skill.metadata); } catch { /* legacy */ }
+        const kind: SkillKind = meta.kind === "agent-skill" ? "agent-skill" : "prompt";
         loaded.push({
           id: i,
+          kind,
           name: meta.name || `Skill #${i}`,
           description: meta.description || "",
           model: skill.model,
@@ -93,6 +132,7 @@ function ExecuteContent() {
           active: skill.active,
           owner,
           reputation: Number(rate),
+          manifestCount: meta.manifest?.length,
         });
       }
       setSkills(loaded);
@@ -244,7 +284,7 @@ function ExecuteContent() {
                 >
                   {skills.map((s) => (
                     <option key={s.id} value={s.id} disabled={!s.active}>
-                      #{s.id} {s.name} — {s.price} A0GI {!s.active ? "(Inactive)" : ""}
+                      #{s.id} {s.kind === "agent-skill" ? "📦" : "⚡"} {s.name} — {s.price} {s.kind === "agent-skill" ? "W0G" : "A0GI"}{!s.active ? " (Inactive)" : ""}
                     </option>
                   ))}
                 </select>
@@ -275,34 +315,81 @@ function ExecuteContent() {
               </motion.div>
             )}
 
-            <div>
-              <label className="font-display text-sm tracking-wide mb-2 block">
-                2 — YOUR INPUT
-              </label>
-              <textarea
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                disabled={isRunning}
-                placeholder="What do you want the AI to do?"
-                className="w-full h-32 bg-white border-2 border-black rounded-xl px-4 py-3 text-sm resize-y focus:outline-none focus:shadow-brutal-sm disabled:opacity-50 transition-shadow"
-              />
-            </div>
+            {currentSkill?.kind === "agent-skill" ? (
+              <>
+                <div className="bg-[#0038FF] text-white border-2 border-black rounded-2xl p-4">
+                  <div className="font-display text-xs tracking-widest mb-2">📦 AGENT SKILL · TAMPER-PROOF DOWNLOAD</div>
+                  <p className="text-sm text-white/90">Pay {currentSkill.price} W0G to download the encrypted `.skill` bundle. The browser sha256-verifies it byte-for-byte against the on-chain commitment.</p>
+                  {currentSkill.manifestCount && (
+                    <div className="mt-2 font-mono text-[11px] text-white/70">{currentSkill.manifestCount} files in bundle</div>
+                  )}
+                </div>
 
-            <button
-              onClick={handleExecute}
-              disabled={isRunning || !userInput.trim() || !currentSkill?.active}
-              className="w-full h-14 rounded-2xl bg-[#D4FF00] text-black font-display text-lg border-2 border-black shadow-brutal btn-brutal disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {exec.phase === "connecting"
-                ? "CONNECTING WALLET..."
-                : exec.phase === "sending"
-                ? "CONFIRM IN METAMASK..."
-                : exec.phase === "waiting"
-                ? "WAITING FOR ORACLE..."
-                : currentSkill
-                ? `EXECUTE — ${currentSkill.price} A0GI →`
-                : "SELECT A SKILL"}
-            </button>
+                <button
+                  onClick={handleAgentSkillBuy}
+                  disabled={bundleState === "buying" || !currentSkill.active}
+                  className="w-full h-14 rounded-2xl bg-[#D4FF00] text-black font-display text-lg border-2 border-black shadow-brutal btn-brutal disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bundleState === "buying"
+                    ? "PAYING & DOWNLOADING..."
+                    : `BUY & DOWNLOAD — ${currentSkill.price} W0G →`}
+                </button>
+
+                {bundleErr && (
+                  <div className="bg-[#FF3333]/20 border-2 border-[#FF3333] rounded-xl p-3 text-xs text-[#FF3333] font-bold break-words">{bundleErr}</div>
+                )}
+                {bundleState === "done" && bundleResult && (
+                  <div className="bg-[#D4FF00] text-black border-2 border-black rounded-2xl p-4 space-y-2">
+                    <div className="font-display text-base">✓ DOWNLOADED · sha256 verified</div>
+                    <div className="font-mono text-[11px] break-all"><span className="text-black/60">size:</span> {bundleResult.size} B · <span className="text-black/60">files:</span> {bundleResult.manifestLen}</div>
+                    <div className="font-mono text-[11px] break-all"><span className="text-black/60">sha256:</span> {bundleResult.sha256}</div>
+                    <div className="flex gap-2 flex-wrap pt-1">
+                      {bundleResult.tx && (
+                        <a href={`${NETWORK.chainScan}/tx/${bundleResult.tx}`} target="_blank" rel="noopener noreferrer" className="bg-black text-[#D4FF00] font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
+                          SETTLE TX →
+                        </a>
+                      )}
+                      {bundleResult.receiptRoot && (
+                        <a href={`${NETWORK.storageScan}/file/${bundleResult.receiptRoot}`} target="_blank" rel="noopener noreferrer" className="bg-white text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
+                          RECEIPT →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="font-display text-sm tracking-wide mb-2 block">
+                    2 — YOUR INPUT
+                  </label>
+                  <textarea
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    disabled={isRunning}
+                    placeholder="What do you want the AI to do?"
+                    className="w-full h-32 bg-white border-2 border-black rounded-xl px-4 py-3 text-sm resize-y focus:outline-none focus:shadow-brutal-sm disabled:opacity-50 transition-shadow"
+                  />
+                </div>
+
+                <button
+                  onClick={handleExecute}
+                  disabled={isRunning || !userInput.trim() || !currentSkill?.active}
+                  className="w-full h-14 rounded-2xl bg-[#D4FF00] text-black font-display text-lg border-2 border-black shadow-brutal btn-brutal disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exec.phase === "connecting"
+                    ? "CONNECTING WALLET..."
+                    : exec.phase === "sending"
+                    ? "CONFIRM IN METAMASK..."
+                    : exec.phase === "waiting"
+                    ? "WAITING FOR ORACLE..."
+                    : currentSkill
+                    ? `EXECUTE — ${currentSkill.price} A0GI →`
+                    : "SELECT A SKILL"}
+                </button>
+              </>
+            )}
 
             {walletAddr && exec.phase === "idle" && (
               <p className="text-xs text-black/60 text-center font-mono">

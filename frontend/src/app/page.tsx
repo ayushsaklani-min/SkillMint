@@ -10,8 +10,11 @@ import Footer from "@/components/footer";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
+type SkillKind = "prompt" | "agent-skill";
+
 interface SkillCard {
   id: number;
+  kind: SkillKind;
   name: string;
   description: string;
   model: string;
@@ -170,12 +173,115 @@ function FloatingSkillCard({
   );
 }
 
+// SDK code preview — toggles between AI-skill (executeX402) and agent-skill
+// (downloadAgentSkill) flows. Same window chrome as the rest of the page.
+function SdkCodeWindow() {
+  const [tab, setTab] = useState<"ai" | "agent">("ai");
+  return (
+    <div className="bg-[#0a0a0a] text-white border-2 border-black rounded-3xl shadow-brutal-lg overflow-hidden h-full flex flex-col">
+      <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/10 bg-[#1a1a1a]">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-[#FF5F57] border border-black/40" />
+          <span className="w-3 h-3 rounded-full bg-[#FEBC2E] border border-black/40" />
+          <span className="w-3 h-3 rounded-full bg-[#28C840] border border-black/40" />
+        </div>
+        <span className="font-mono text-[10px] tracking-widest text-white/60">
+          {tab === "ai" ? "agent-run.ts" : "agent-skill-buy.ts"}
+        </span>
+        <span className="font-mono text-[10px] tracking-widest text-[#D4FF00]">● LIVE</span>
+      </div>
+
+      <div className="flex border-b-2 border-white/10 bg-[#0f0f0f]">
+        <button
+          onClick={() => setTab("ai")}
+          className={`flex-1 py-2.5 font-mono text-[10px] font-bold tracking-widest transition-colors ${
+            tab === "ai" ? "bg-[#D4FF00] text-black" : "text-white/60 hover:text-white"
+          }`}
+        >
+          ⚡ AI SKILL
+        </button>
+        <button
+          onClick={() => setTab("agent")}
+          className={`flex-1 py-2.5 font-mono text-[10px] font-bold tracking-widest transition-colors border-l-2 border-white/10 ${
+            tab === "agent" ? "bg-[#D4FF00] text-black" : "text-white/60 hover:text-white"
+          }`}
+        >
+          📦 AGENT SKILL
+        </button>
+      </div>
+
+      <pre className="px-5 sm:px-7 py-6 sm:py-7 text-[12px] sm:text-[13px] leading-relaxed font-mono overflow-x-auto flex-1">
+        {tab === "ai" ? (
+          <code><span className="text-white/40">{`// agent flow — zero URL config`}</span>{`
+`}<span className="text-[#FF5F57]">{`import`}</span>{` { SkillMintClient } `}<span className="text-[#FF5F57]">{`from`}</span>{` `}<span className="text-[#D4FF00]">{`"@skillmint/sdk"`}</span>{`;
+
+`}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
+  privateKey: process.env.PRIVATE_KEY!,
+  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
+});
+
+`}<span className="text-white/40">{`// 1. discover`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` skills = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`listSkills`}</span>{`();
+
+`}<span className="text-white/40">{`// 2. pay + run inside the TEE`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` r = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`executeX402`}</span>{`(
+  `}<span className="text-[#D4FF00]">{`15`}</span>{`, `}<span className="text-[#D4FF00]">{`"summarize ..."`}</span>{`,
+);
+console.log(r.output);
+console.log(r.settlement.transaction);
+
+`}<span className="text-white/40">{`// 3. verify the receipt — anyone can`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` rec = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`fetchReceipt`}</span>{`(r.receiptRootHash);
+client.`}<span className="text-[#28C840]">{`verifyReceipt`}</span>{`(rec);
+`}<span className="text-white/40">{`// → { valid: true, teeVerified: true }`}</span></code>
+        ) : (
+          <code><span className="text-white/40">{`// agent-skill flow — buy a Claude/Codex bundle`}</span>{`
+`}<span className="text-[#FF5F57]">{`import`}</span>{` { SkillMintClient } `}<span className="text-[#FF5F57]">{`from`}</span>{` `}<span className="text-[#D4FF00]">{`"@skillmint/sdk"`}</span>{`;
+
+`}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
+  privateKey: process.env.PRIVATE_KEY!,
+  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
+});
+
+`}<span className="text-white/40">{`// 1. pay W0G + download — sha256 verified locally`}</span>{`
+`}<span className="text-[#FF5F57]">{`const`}</span>{` dl = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`downloadAgentSkill`}</span>{`(`}<span className="text-[#D4FF00]">{`21`}</span>{`);
+dl.bundle           `}<span className="text-white/40">{`// ← decrypted .skill zip`}</span>{`
+dl.bundleSha256     `}<span className="text-white/40">{`// ← anchored on-chain`}</span>{`
+dl.manifest         `}<span className="text-white/40">{`// ["SKILL.md", "references/..."]`}</span>{`
+
+`}<span className="text-white/40">{`// 2. or extract straight to disk`}</span>{`
+`}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`downloadAgentSkill`}</span>{`(`}<span className="text-[#D4FF00]">{`21`}</span>{`, {
+  extractTo: `}<span className="text-[#D4FF00]">{`"./fhenix-dev"`}</span>{`,
+});
+
+`}<span className="text-white/40">{`// 3. publish your own — encrypts on 0G Storage`}</span>{`
+`}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`registerAgentSkill`}</span>{`({
+  bundle: `}<span className="text-[#D4FF00]">{`"./my-skill.skill"`}</span>{`,
+  name:   `}<span className="text-[#D4FF00]">{`"my-skill"`}</span>{`,
+  price:  `}<span className="text-[#D4FF00]">{`"0.005"`}</span>{`,
+});`}</code>
+        )}
+      </pre>
+
+      <div className="border-t-2 border-white/10 px-5 py-3 flex items-center justify-between bg-[#1a1a1a]">
+        <span className="font-mono text-[10px] tracking-widest text-white/60">
+          ETHERS V6 · NODE 20+
+        </span>
+        <span className="bg-[#D4FF00] text-black font-mono text-[10px] font-bold tracking-widest px-2 py-1 border-2 border-black rounded-full">
+          v0.3.0
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const [skills, setSkills] = useState<SkillCard[]>([]);
   const [stats, setStats] = useState<Stats>({ skillCount: 0, totalExecutions: 0, totalRevenue: "0" });
   const [loading, setLoading] = useState(true);
+  const [kindFilter, setKindFilter] = useState<"all" | SkillKind>("all");
 
   useEffect(() => {
     loadData();
@@ -194,14 +300,16 @@ export default function HomePage() {
         const skill = await registry.getSkill(i);
         const [total, successful, rate] = await registry.getReputationScore(i);
         const owner = await registry.ownerOf(i);
-        let meta: { name?: string; description?: string } = {};
-        try { meta = JSON.parse(skill.metadata); } catch {}
+        let meta: { name?: string; description?: string; kind?: SkillKind } = {};
+        try { meta = JSON.parse(skill.metadata); } catch { /* legacy */ }
+        const kind: SkillKind = meta.kind === "agent-skill" ? "agent-skill" : "prompt";
 
         const execCount = Number(total);
         totalExecs += execCount;
 
         loaded.push({
           id: i,
+          kind,
           name: meta.name || `Skill #${i}`,
           description: meta.description || "",
           model: skill.model,
@@ -556,6 +664,27 @@ export default function HomePage() {
             </Link>
           </FadeIn>
 
+          {/* Kind filter chips */}
+          {!loading && skills.length > 0 && (
+            <FadeIn className="mb-8 flex flex-wrap gap-2 justify-center">
+              {([
+                { v: "all", label: "ALL", count: skills.length },
+                { v: "prompt", label: "⚡ AI SKILLS", count: skills.filter(s => s.kind === "prompt").length },
+                { v: "agent-skill", label: "📦 AGENT SKILLS", count: skills.filter(s => s.kind === "agent-skill").length },
+              ] as const).map((c) => (
+                <button
+                  key={c.v}
+                  onClick={() => setKindFilter(c.v)}
+                  className={`px-4 py-2 font-display text-xs tracking-widest border-2 border-black rounded-full btn-brutal ${
+                    kindFilter === c.v ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black shadow-brutal-sm"
+                  }`}
+                >
+                  {c.label} <span className="ml-1 font-mono text-[10px] text-black/60">{c.count}</span>
+                </button>
+              ))}
+            </FadeIn>
+          )}
+
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -571,14 +700,21 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {skills.map((s, i) => (
+              {skills.filter(s => kindFilter === "all" || s.kind === kindFilter).map((s, i) => (
                 <FadeIn key={s.id} delay={i * 0.04}>
                   <Link href={`/skill/${s.id}`}>
                     <div className="relative h-full bg-white text-black border-2 border-black rounded-2xl shadow-brutal btn-brutal p-5 group cursor-pointer">
                       {/* Top row */}
                       <div className="flex items-start justify-between gap-2 mb-4">
-                        <div className="bg-[#D4FF00] text-black font-display text-xs px-2.5 py-1 border-2 border-black rounded-full">
-                          NFT #{s.id}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="bg-[#D4FF00] text-black font-display text-xs px-2.5 py-1 border-2 border-black rounded-full">
+                            NFT #{s.id}
+                          </div>
+                          <div className={`font-mono text-[9px] tracking-widest font-bold px-2 py-1 border-2 border-black rounded-full ${
+                            s.kind === "agent-skill" ? "bg-white text-black" : "bg-black text-[#D4FF00]"
+                          }`}>
+                            {s.kind === "agent-skill" ? "📦 BUNDLE" : "⚡ PROMPT"}
+                          </div>
                         </div>
                         {s.active ? (
                           <div className="flex items-center gap-1.5 bg-black text-[#D4FF00] font-mono text-[10px] font-bold px-2 py-1 rounded-full">
@@ -604,12 +740,12 @@ export default function HomePage() {
                       {/* Stats row */}
                       <div className="flex items-center justify-between gap-2 pt-4 border-t-2 border-black">
                         <span className="bg-[#0038FF] text-white font-display text-xs px-3 py-1.5 rounded-full border-2 border-black">
-                          {s.price} A0GI
+                          {s.price} {s.kind === "agent-skill" ? "W0G" : "A0GI"}
                         </span>
                         <div className="flex items-center gap-2 text-xs font-mono font-bold">
                           {s.total > 0 && (
                             <span className="text-black">
-                              {s.rate}% <span className="text-black/50">· {s.total} runs</span>
+                              {s.rate}% <span className="text-black/50">· {s.total} {s.kind === "agent-skill" ? "dl" : "runs"}</span>
                             </span>
                           )}
                           {s.total === 0 && <span className="text-black/50">NEW</span>}
@@ -701,8 +837,11 @@ export default function HomePage() {
                 <span className="text-[#D4FF00] text-3d-lime">EARN AUTOMATICALLY.</span>
               </h2>
               <p className="mt-6 text-white/80 text-base sm:text-lg max-w-2xl mx-auto">
-                The TypeScript SDK any agent uses to discover skills, pay with W0G via x402, run TEE-attested inference, and verify receipts. Zero URL config.
+                The TypeScript SDK any agent uses to discover skills, pay with W0G via x402, run TEE-attested inference, download Claude/Codex skill bundles, and verify receipts. Zero URL config.
               </p>
+              <div className="mt-5 inline-flex items-center gap-2 bg-white text-black font-mono text-[10px] font-bold tracking-widest px-3 py-1.5 border-2 border-black rounded-full">
+                TWO SKILL KINDS · TEE INFERENCE + FOLDER BUNDLES
+              </div>
             </FadeIn>
 
             <div className="grid md:grid-cols-[1fr_1.2fr] gap-8 items-stretch">
@@ -720,9 +859,9 @@ export default function HomePage() {
                   <ul className="space-y-3 mb-7 text-sm">
                     {[
                       "listSkills, resolveSkill, searchSkills",
-                      "executeX402 — pay with W0G, no gas for the agent",
-                      "fetchReceipt + verifyReceipt — TEE proof in one call",
-                      "registerSkill — mint your own skill NFT",
+                      "executeX402 — pay W0G, run inside the TEE",
+                      "downloadAgentSkill — buy Claude/Codex bundles, sha256 verified",
+                      "registerSkill / registerAgentSkill — mint your own NFT",
                     ].map((line) => (
                       <li key={line} className="flex items-start gap-2.5">
                         <span className="mt-1 inline-block w-3 h-3 bg-[#D4FF00] border-2 border-black rounded-sm shrink-0" />
@@ -752,60 +891,9 @@ export default function HomePage() {
                 </div>
               </FadeIn>
 
-              {/* ── Right: brutalist code window ── */}
+              {/* ── Right: brutalist code window with kind toggle ── */}
               <FadeIn delay={0.1}>
-                <div className="bg-[#0a0a0a] text-white border-2 border-black rounded-3xl shadow-brutal-lg overflow-hidden h-full flex flex-col">
-                  {/* window chrome */}
-                  <div className="flex items-center justify-between px-5 py-3 border-b-2 border-white/10 bg-[#1a1a1a]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-[#FF5F57] border border-black/40" />
-                      <span className="w-3 h-3 rounded-full bg-[#FEBC2E] border border-black/40" />
-                      <span className="w-3 h-3 rounded-full bg-[#28C840] border border-black/40" />
-                    </div>
-                    <span className="font-mono text-[10px] tracking-widest text-white/60">
-                      agent-run.ts
-                    </span>
-                    <span className="font-mono text-[10px] tracking-widest text-[#D4FF00]">
-                      ● LIVE
-                    </span>
-                  </div>
-
-                  {/* code */}
-                  <pre className="px-5 sm:px-7 py-6 sm:py-7 text-[12px] sm:text-[13px] leading-relaxed font-mono overflow-x-auto flex-1">
-<code><span className="text-white/40">{`// agent flow — zero URL config`}</span>
-<span className="text-[#FF5F57]">{`import`}</span>{` { SkillMintClient } `}<span className="text-[#FF5F57]">{`from`}</span>{` `}<span className="text-[#D4FF00]">{`"@skillmint/sdk"`}</span>{`;
-
-`}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
-  privateKey: process.env.PRIVATE_KEY!,
-  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
-});
-
-`}<span className="text-white/40">{`// 1. discover`}</span>{`
-`}<span className="text-[#FF5F57]">{`const`}</span>{` skills = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`listSkills`}</span>{`();
-
-`}<span className="text-white/40">{`// 2. pay + run inside the TEE`}</span>{`
-`}<span className="text-[#FF5F57]">{`const`}</span>{` r = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`executeX402`}</span>{`(
-  `}<span className="text-[#D4FF00]">{`15`}</span>{`, `}<span className="text-[#D4FF00]">{`"summarize ..."`}</span>{`,
-);
-console.log(r.output);
-console.log(r.settlement.transaction);
-
-`}<span className="text-white/40">{`// 3. verify the receipt — anyone can`}</span>{`
-`}<span className="text-[#FF5F57]">{`const`}</span>{` rec = `}<span className="text-[#FF5F57]">{`await`}</span>{` client.`}<span className="text-[#28C840]">{`fetchReceipt`}</span>{`(r.receiptRootHash);
-client.`}<span className="text-[#28C840]">{`verifyReceipt`}</span>{`(rec);
-`}<span className="text-white/40">{`// → { valid: true, teeVerified: true }`}</span></code>
-                  </pre>
-
-                  {/* footer pill */}
-                  <div className="border-t-2 border-white/10 px-5 py-3 flex items-center justify-between bg-[#1a1a1a]">
-                    <span className="font-mono text-[10px] tracking-widest text-white/60">
-                      ETHERS V6 · NODE 20+
-                    </span>
-                    <span className="bg-[#D4FF00] text-black font-mono text-[10px] font-bold tracking-widest px-2 py-1 border-2 border-black rounded-full">
-                      v0.2.1
-                    </span>
-                  </div>
-                </div>
+                <SdkCodeWindow />
               </FadeIn>
             </div>
           </div>

@@ -4,14 +4,15 @@ import { useState } from "react";
 import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { NETWORK, REGISTRY_ABI } from "@/lib/contracts";
+import { NETWORK, REGISTRY_ABI, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL } from "@/lib/contracts";
 import { hashPrompt } from "@/lib/hash";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
-const STEPS = [
+type Kind = "prompt" | "agent-skill";
+const stepsForKind = (k: Kind) => [
   { num: 1, title: "BASICS" },
-  { num: 2, title: "PROMPT" },
+  { num: 2, title: k === "prompt" ? "PROMPT" : "BUNDLE" },
   { num: 3, title: "PRICING" },
   { num: 4, title: "REVIEW" },
 ];
@@ -23,7 +24,16 @@ const MODELS = [
   { value: "qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B", network: "Mainnet" },
 ];
 
+const COMPAT = ["claude-code", "cursor", "codex"] as const;
+
+function fmtBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function PublishPage() {
+  const [kind, setKind] = useState<Kind>("prompt");
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -32,32 +42,63 @@ export default function PublishPage() {
   const [model, setModel] = useState("qwen/qwen-2.5-7b-instruct");
   const [computeProvider, setComputeProvider] = useState("0xa48f01287233509FD694a22Bf840225062E67836");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ skillId: string; txHash: string; nftOwner: string } | null>(null);
+  const [result, setResult] = useState<{ skillId: string; txHash: string; nftOwner: string; kind: Kind } | null>(null);
   const [error, setError] = useState("");
+
+  // Agent-skill bundle state
+  const [bundleFile, setBundleFile] = useState<File | null>(null);
+  const [bundleManifest, setBundleManifest] = useState<string[]>([]);
+  const [bundleErr, setBundleErr] = useState("");
+  const [compat, setCompat] = useState<string[]>(["claude-code"]);
+
+  const STEPS = stepsForKind(kind);
+
+  async function onPickBundle(file: File | null) {
+    setBundleFile(null); setBundleManifest([]); setBundleErr("");
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setBundleErr("bundle exceeds 10 MB limit"); return; }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
+      if (!names.includes("SKILL.md")) { setBundleErr("bundle must contain SKILL.md at the root"); return; }
+      const sorted = [...names].sort((a, b) => a === "SKILL.md" ? -1 : b === "SKILL.md" ? 1 : a.localeCompare(b));
+      setBundleFile(file);
+      setBundleManifest(sorted.slice(0, 20));
+      if (!name) setName(file.name.replace(/\.(skill|zip)$/i, ""));
+    } catch (e) {
+      setBundleErr(`could not open zip: ${e instanceof Error ? e.message : "unknown"}`);
+    }
+  }
+
+  async function ensureWalletReady() {
+    if (!window.ethereum) throw new Error("MetaMask not found.");
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: `0x${NETWORK.chainId.toString(16)}` }],
+    }).catch(async () => {
+      await window.ethereum!.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: `0x${NETWORK.chainId.toString(16)}`,
+          chainName: "0G Testnet",
+          rpcUrls: [NETWORK.rpcUrl],
+          blockExplorerUrls: [NETWORK.chainScan],
+          nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
+        }],
+      });
+    });
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+    const signer = await provider.getSigner();
+    return { provider, signer, address: await signer.getAddress() };
+  }
 
   async function publish() {
     setLoading(true); setError(""); setResult(null);
     try {
-      if (!window.ethereum) throw new Error("MetaMask not found.");
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${NETWORK.chainId.toString(16)}` }],
-      }).catch(async () => {
-        await window.ethereum!.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: `0x${NETWORK.chainId.toString(16)}`,
-            chainName: "0G Testnet",
-            rpcUrls: [NETWORK.rpcUrl],
-            blockExplorerUrls: [NETWORK.chainScan],
-            nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
-          }],
-        });
-      });
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const browserProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-      const signer = await browserProvider.getSigner();
-      const signerAddr = await signer.getAddress();
+      if (kind === "agent-skill") return await publishAgent();
+      const { signer, address } = await ensureWalletReady();
       const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
 
       // Encrypt prompt via the oracle: the ciphertext goes to 0G Storage, the plaintext
@@ -79,6 +120,7 @@ export default function PublishPage() {
       const promptHash = hashPrompt(systemPrompt);
       const priceWei = ethers.parseEther(price);
       const metadata = JSON.stringify({
+        kind: "prompt",
         name,
         description,
         storageRoot: enc.storageRoot,
@@ -89,7 +131,7 @@ export default function PublishPage() {
       const tx = await registry.registerSkill(promptHash, computeProvider, model, priceWei, metadata);
       await tx.wait();
       const skillCount = await registry.skillCount();
-      setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: signerAddr });
+      setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "prompt" });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg.includes("user rejected") ? "Transaction rejected by user" : msg);
@@ -98,10 +140,58 @@ export default function PublishPage() {
     }
   }
 
+  async function publishAgent() {
+    if (!bundleFile) throw new Error("pick a .skill or .zip bundle first");
+    const { signer, address } = await ensureWalletReady();
+
+    // 1. Encrypt + upload via oracle (multipart)
+    const form = new FormData();
+    form.append("bundle", bundleFile, bundleFile.name);
+    form.append("name", name);
+    const encRes = await fetch("/api/oracle/encrypt-bundle", { method: "POST", body: form });
+    if (!encRes.ok) {
+      const errText = await encRes.text().catch(() => "");
+      throw new Error(`Bundle encryption failed: ${encRes.status} ${errText}`);
+    }
+    const enc = await encRes.json() as {
+      storageRoot: string; iv: string; algo: "aes-256-gcm"; keyId: string;
+      sha256: string; manifest: string[]; sizeBytes: number;
+    };
+
+    // 2. Mint NFT — promptHash = bundleSha256 (the cryptographic prompt-equivalent)
+    const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
+    const priceWei = ethers.parseEther(price);
+    const metadata = JSON.stringify({
+      kind: "agent-skill",
+      name,
+      description,
+      bundleStorageRoot: enc.storageRoot,
+      bundleIv: enc.iv,
+      bundleAlgo: enc.algo,
+      keyId: enc.keyId,
+      bundleSha256: enc.sha256,
+      sizeBytes: enc.sizeBytes,
+      manifest: enc.manifest,
+      format: "claude-skill",
+      compatibleWith: compat,
+    });
+    const tx = await registry.registerSkill(enc.sha256, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL, priceWei, metadata);
+    await tx.wait();
+    const skillCount = await registry.skillCount();
+    setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "agent-skill" });
+  }
+
   const canNext = () => {
     if (step === 1) return name.trim() && description.trim();
-    if (step === 2) return systemPrompt.trim().length > 10;
-    if (step === 3) return Number(price) >= 0.001 && computeProvider.trim();
+    if (step === 2) {
+      return kind === "prompt"
+        ? systemPrompt.trim().length > 10
+        : !!bundleFile && !bundleErr;
+    }
+    if (step === 3) {
+      if (kind === "agent-skill") return Number(price) >= 0.001;
+      return Number(price) >= 0.001 && computeProvider.trim();
+    }
     return true;
   };
 
@@ -124,6 +214,33 @@ export default function PublishPage() {
 
         {!result && (
           <>
+            {/* Kind toggle — choose AI Skill (TEE inference) vs Agent Skill (folder bundle) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }}
+              className="grid grid-cols-2 gap-3 mb-5"
+            >
+              <button
+                type="button"
+                onClick={() => { setKind("prompt"); setStep(1); }}
+                className={`text-left p-4 rounded-2xl border-2 border-black btn-brutal ${
+                  kind === "prompt" ? "bg-[#D4FF00] text-black shadow-brutal" : "bg-white text-black shadow-brutal-sm"
+                }`}
+              >
+                <div className="font-display text-base leading-tight">⚡ AI SKILL</div>
+                <div className="font-mono text-[10px] tracking-widest mt-1 text-black/70">PROMPT · TEE-ATTESTED</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setKind("agent-skill"); setStep(1); }}
+                className={`text-left p-4 rounded-2xl border-2 border-black btn-brutal ${
+                  kind === "agent-skill" ? "bg-[#D4FF00] text-black shadow-brutal" : "bg-white text-black shadow-brutal-sm"
+                }`}
+              >
+                <div className="font-display text-base leading-tight">📦 AGENT SKILL</div>
+                <div className="font-mono text-[10px] tracking-widest mt-1 text-black/70">FOLDER · CLAUDE / CODEX</div>
+              </button>
+            </motion.div>
+
             {/* Stepper */}
             <motion.div
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
@@ -175,7 +292,7 @@ export default function PublishPage() {
                 </div>
               )}
 
-              {step === 2 && (
+              {step === 2 && kind === "prompt" && (
                 <div className="space-y-5">
                   <Field label="SYSTEM PROMPT">
                     <textarea
@@ -193,7 +310,66 @@ export default function PublishPage() {
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 2 && kind === "agent-skill" && (
+                <div className="space-y-5">
+                  <Field label="BUNDLE FILE (.skill or .zip · ≤ 10 MB · must contain SKILL.md)">
+                    <input
+                      type="file"
+                      accept=".skill,.zip,application/zip"
+                      onChange={(e) => onPickBundle(e.target.files?.[0] ?? null)}
+                      className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-xs font-mono cursor-pointer file:mr-3 file:px-3 file:py-1.5 file:bg-[#D4FF00] file:text-black file:border-2 file:border-black file:rounded-lg file:font-display file:text-[10px] file:tracking-widest file:cursor-pointer focus:outline-none"
+                    />
+                  </Field>
+                  {bundleErr && (
+                    <div className="bg-[#FF3333]/20 border-2 border-[#FF3333] rounded-xl p-3 text-xs text-[#FF3333] font-bold">
+                      {bundleErr}
+                    </div>
+                  )}
+                  {bundleFile && !bundleErr && (
+                    <div className="bg-[#FAFAFA] border-2 border-black rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-mono text-xs font-bold truncate">{bundleFile.name}</div>
+                        <div className="font-mono text-[10px] text-black/60 shrink-0">{fmtBytes(bundleFile.size)}</div>
+                      </div>
+                      <div className="font-mono text-[10px] tracking-widest text-black/50">MANIFEST · {bundleManifest.length} ENTRIES</div>
+                      <ul className="font-mono text-[11px] space-y-0.5 max-h-44 overflow-y-auto">
+                        {bundleManifest.map((n) => (
+                          <li key={n} className="truncate">
+                            {n === "SKILL.md" ? <span className="text-[#0038FF] font-bold">▸ {n}</span> : <span className="text-black/75">  {n}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <Field label="COMPATIBLE WITH (informational)">
+                    <div className="flex flex-wrap gap-2">
+                      {COMPAT.map((c) => {
+                        const active = compat.includes(c);
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setCompat(active ? compat.filter((x) => x !== c) : [...compat, c])}
+                            className={`px-3 py-1.5 font-mono text-[11px] tracking-widest border-2 border-black rounded-full btn-brutal ${
+                              active ? "bg-[#0038FF] text-white shadow-brutal-sm" : "bg-white text-black"
+                            }`}
+                          >
+                            {c.toUpperCase()}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                  <div className="flex items-start gap-3 p-4 bg-[#D4FF00] border-2 border-black rounded-xl">
+                    <span className="font-display text-xl">📦</span>
+                    <div className="text-xs font-medium text-black">
+                      <span className="font-display">HOW IT WORKS:</span> Bundle is encrypted on 0G Storage. sha256 anchored on-chain. Buyers pay W0G via x402, get the zip back, verify byte-for-byte.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && kind === "prompt" && (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <Field label="PRICE (A0GI)">
@@ -228,20 +404,55 @@ export default function PublishPage() {
                 </div>
               )}
 
+              {step === 3 && kind === "agent-skill" && (
+                <div className="space-y-5">
+                  <Field label="PRICE PER DOWNLOAD (W0G)">
+                    <input
+                      value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="0.001" min="0.001"
+                      className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
+                    />
+                  </Field>
+                  <div className="bg-[#0038FF] text-white border-2 border-black rounded-2xl p-5">
+                    <div className="font-display text-xs tracking-widest mb-3">REVENUE SPLIT (PER DOWNLOAD)</div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span>Price per download</span><span className="font-mono font-bold">{price} W0G</span></div>
+                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(price) * 0.9).toFixed(4)} W0G</span></div>
+                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(price) * 0.1).toFixed(4)} W0G</span></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {step === 4 && (
                 <div className="space-y-4">
-                  <h3 className="font-display text-lg tracking-wide mb-2">REVIEW YOUR SKILL</h3>
+                  <h3 className="font-display text-lg tracking-wide mb-2">REVIEW YOUR {kind === "agent-skill" ? "AGENT SKILL" : "SKILL"}</h3>
                   <div className="bg-[#FAFAFA] border-2 border-black rounded-xl p-4 space-y-3">
+                    <ReviewRow label="Kind" value={kind === "agent-skill" ? "Agent Skill (folder bundle)" : "AI Skill (prompt)"} highlight />
                     <ReviewRow label="Name" value={name} />
                     <ReviewRow label="Description" value={description} />
-                    <ReviewRow label="Model" value={MODELS.find(m => m.value === model)?.label || model} />
-                    <ReviewRow label="Price" value={`${price} A0GI`} highlight />
-                    <ReviewRow label="Compute Provider" value={computeProvider} mono />
-                    <ReviewRow label="System Prompt" value={systemPrompt.slice(0, 120) + (systemPrompt.length > 120 ? "..." : "")} />
+                    {kind === "prompt" ? (
+                      <>
+                        <ReviewRow label="Model" value={MODELS.find(m => m.value === model)?.label || model} />
+                        <ReviewRow label="Price" value={`${price} A0GI`} highlight />
+                        <ReviewRow label="Compute Provider" value={computeProvider} mono />
+                        <ReviewRow label="System Prompt" value={systemPrompt.slice(0, 120) + (systemPrompt.length > 120 ? "..." : "")} />
+                      </>
+                    ) : (
+                      <>
+                        <ReviewRow label="Bundle" value={`${bundleFile?.name ?? "(none)"} · ${bundleFile ? fmtBytes(bundleFile.size) : ""}`} mono />
+                        <ReviewRow label="Manifest" value={`${bundleManifest.length} entr${bundleManifest.length === 1 ? "y" : "ies"}`} />
+                        <ReviewRow label="Compatible with" value={compat.length ? compat.join(", ") : "(none)"} mono />
+                        <ReviewRow label="Price per download" value={`${price} W0G`} highlight />
+                      </>
+                    )}
                   </div>
                   <div className="bg-[#D4FF00] text-black border-2 border-black rounded-xl p-4">
                     <div className="font-display text-sm mb-1">ERC-721 NFT MINTING</div>
-                    <p className="text-xs">On publish, you&apos;ll receive an NFT token that earns 90% of every execution. Transfer or sell — revenue follows the owner.</p>
+                    <p className="text-xs">
+                      {kind === "agent-skill"
+                        ? "On publish, the bundle is encrypted on 0G Storage and the sha256 is anchored on-chain. You earn 90% of every download, forever."
+                        : "On publish, you'll receive an NFT token that earns 90% of every execution. Transfer or sell — revenue follows the owner."}
+                    </p>
                   </div>
                   {error && (
                     <div className="bg-[#FF3333]/20 border-2 border-[#FF3333] rounded-xl p-3 text-sm text-[#FF3333] font-bold">
@@ -298,13 +509,14 @@ export default function PublishPage() {
                 >
                   <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                 </motion.div>
-                <h2 className="font-display text-4xl sm:text-5xl mb-2">SKILL MINTED!</h2>
+                <h2 className="font-display text-4xl sm:text-5xl mb-2">{result.kind === "agent-skill" ? "BUNDLE MINTED!" : "SKILL MINTED!"}</h2>
                 <p className="text-sm font-mono font-bold tracking-wider text-black/70 mb-6">
-                  LIVE ON 0G CHAIN · AGENTS CAN EXECUTE NOW
+                  LIVE ON 0G CHAIN · {result.kind === "agent-skill" ? "AGENTS CAN DOWNLOAD NOW" : "AGENTS CAN EXECUTE NOW"}
                 </p>
                 <div className="flex items-center justify-center gap-2 mb-6 flex-wrap">
                   <span className="bg-[#0038FF] text-white font-display text-sm px-3 py-1.5 border-2 border-black rounded-full">NFT #{result.skillId}</span>
                   <span className="bg-[#D4FF00] text-black font-display text-sm px-3 py-1.5 border-2 border-black rounded-full">LIVE</span>
+                  <span className="bg-white text-black font-display text-sm px-3 py-1.5 border-2 border-black rounded-full">{result.kind === "agent-skill" ? "📦 AGENT SKILL" : "⚡ AI SKILL"}</span>
                 </div>
                 <div className="bg-[#FAFAFA] border-2 border-black rounded-xl p-4 text-left mb-6 space-y-3">
                   <ReviewRow label="Skill ID" value={`#${result.skillId}`} />

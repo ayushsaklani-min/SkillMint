@@ -81,7 +81,7 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 | **`contracts/`**   | `SkillRegistryV2` (ERC-721 + ERC-2981) · `SkillEscrowV2` (PullPayment) |
 | **`oracle/`**      | Event watcher → 0G Compute TEE → receipt on 0G Storage → on-chain confirm |
 | **`frontend/`**    | Next.js 16 · neo-brutalist UI · ethers.js · scroll-driven explainer    |
-| **`sdk/`**         | TypeScript SDK · `@skillmint/sdk` — `listSkills` · `executeX402` · `verifyReceipt` · `registerSkill` |
+| **`sdk/`**         | TypeScript SDK · `@skillmint/sdk` — `listSkills` · `executeX402` · `downloadAgentSkill` · `verifyReceipt` · `registerSkill` · `registerAgentSkill` |
 | **`skills/`**      | Seed skill registry + `register-all.js` bootstrap                      |
 | **`shared/`**      | ABIs + network config (testnet ↔ mainnet)                              |
 | **`tee-sandbox/`** | Standalone TEE compute test harness                                    |
@@ -114,7 +114,11 @@ cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
 
 ## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
 
-**`@skillmint/sdk`** — TypeScript client for agents. Discover skills, pay with W0G via [x402](https://x402.org), run TEE-attested inference, verify receipts. Defaults point at the live Vercel-proxied backend, so no URL configuration is required.
+**`@skillmint/sdk`** — TypeScript client for agents. Two skill kinds:
+- **AI skills** (prompt) — pay with W0G via [x402](https://x402.org), run inside a 0G Compute TEE, verify the signed receipt.
+- **Agent skills** (folder bundles) — pay with W0G, download an encrypted `.skill` zip (Anthropic Claude / Codex / Cursor compatible), sha256-verify locally.
+
+Defaults point at the live Vercel-proxied backend, so no URL configuration is required.
 
 ```bash
 npm install @skillmint/sdk ethers
@@ -148,20 +152,58 @@ const v = client.verifyReceipt(receipt);
 // → { valid: true, inputHashOk: true, outputHashOk: true, teeVerified: true }
 ```
 
-| Surface       | Methods |
-|---------------|---------|
-| **Discovery** | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` · `getReputation` |
-| **Execute**   | `executeX402` (x402 + W0G) · `executeAndWait` (native escrow) · `getExecutionOutcome` |
-| **W0G**       | `wrapW0G` · `unwrapW0G` · `getW0GBalance` |
-| **Receipts**  | `fetchReceipt` · `verifyReceipt` |
-| **Publish**   | `registerSkill` — mints the NFT, encrypts the prompt to 0G Storage |
-| **Owner**     | `updatePrice` · `deactivateSkill` · `transferSkill` · `withdrawRevenue` |
+```typescript
+// agent-skill flow — buy + download an Anthropic-format Claude Skill bundle
+const dl = await client.downloadAgentSkill(21);   // skill #21 = "fhenix-dev"
+dl.bundle           // ← decrypted .skill zip bytes
+dl.bundleSha256     // ← anchored on-chain, recomputed locally to detect tampering
+dl.manifest         // ← ["SKILL.md", "references/architecture.md", ...]
+dl.settlement.transaction
 
-A runnable end-to-end agent example lives at [`sdk/examples/agent-run.mjs`](sdk/examples/agent-run.mjs) — discovers skills, picks one, pays via x402, verifies the receipt. Zero URL overrides.
+// Verify the bundle matches the on-chain commitment, byte-for-byte
+const r = await client.fetchReceipt(dl.receiptRootHash);
+client.verifyReceipt(r, { bundle: dl.bundle });
+// → { kind: "agent-skill", sha256Ok: true, valid: true }
+
+// Or extract straight to disk (uses adm-zip)
+await client.downloadAgentSkill(21, { extractTo: "./fhenix-dev" });
+
+// Publishing your own — multipart upload, encrypted on 0G Storage, sha256
+// + storage root anchored in the NFT metadata
+await client.registerAgentSkill({
+  bundle: "./my-skill.skill",          // path or Buffer/Uint8Array
+  name: "my-skill",
+  description: "...",
+  price: "0.005",                      // W0G per download
+  format: "claude-skill",
+  compatibleWith: ["claude-code", "cursor", "codex"],
+});
+```
+
+| Surface          | Methods |
+|------------------|---------|
+| **Discovery**    | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` · `getReputation` |
+| **AI skills**    | `executeX402` (x402 + W0G) · `executeAndWait` (native escrow) · `getExecutionOutcome` |
+| **Agent skills** | `registerAgentSkill` (publish folder bundle) · `downloadAgentSkill` (buy + sha256-verify) |
+| **W0G**          | `wrapW0G` · `unwrapW0G` · `getW0GBalance` |
+| **Receipts**     | `fetchReceipt` · `verifyReceipt` (works on both kinds; pass `{ bundle }` for agent skills) |
+| **Publish**      | `registerSkill` (prompt) · `registerAgentSkill` (folder bundle) |
+| **Owner**        | `updatePrice` · `deactivateSkill` · `transferSkill` · `withdrawRevenue` |
+
+Runnable end-to-end examples — discovers skills, picks one, pays via x402, verifies the receipt — live at [`sdk/examples/agent-run.mjs`](sdk/examples/agent-run.mjs) (prompt skill) and [`sdk/examples/agent-skill-e2e.mjs`](sdk/examples/agent-skill-e2e.mjs) (agent skill, end-to-end on Galileo). Zero URL overrides.
+
+## ![SKILL KINDS](https://img.shields.io/badge/🧬-SKILL_KINDS-0038FF?style=for-the-badge&labelColor=000000)
+
+| Kind | What it is | Trust guarantee |
+|---|---|---|
+| **AI Skill** (prompt) | A system prompt run inside a TEE (0G Compute hardware enclave) | TEE attestation — model + prompt + output cryptographically signed by the enclave |
+| **Agent Skill** (folder) | A `.skill` zip bundle (SKILL.md + reference markdown), Claude Code / Codex / Cursor compatible | Tamper-proof distribution — sha256 of the bundle is anchored on-chain; download verifies byte-for-byte |
 
 ## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
 > **Status:** ![Testnet](https://img.shields.io/badge/TESTNET-LIVE-20C20E?style=flat-square&labelColor=000000) · ![Mainnet](https://img.shields.io/badge/0G_MAINNET-NEXT-D4FF00?style=flat-square&labelColor=000000) — actively running on 0G Galileo Testnet. Mainnet contracts deploy as the next milestone.
+>
+> **Live agent-skill demo:** `fhenix-dev` (FHE blockchain knowledge bundle) is published as skill #21 — `await client.downloadAgentSkill(21)` to buy + verify it end-to-end.
 
 | Component | Where |
 |-----------|-------|

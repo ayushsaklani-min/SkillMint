@@ -24,6 +24,8 @@ import { hashInput, hashOutput } from '../../shared/hash.js';
 import { serializeReceipt } from '../../shared/receipt.js';
 import { decodePaymentHeader } from '../../facilitator/src/x402.js';
 import { loadSystemPrompt } from './index-helpers.js';
+import { decryptBuffer } from './crypto.js';
+import { sha256Hex } from './agent-skill-bundle.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -106,8 +108,12 @@ async function getSkillRequirements(skillId) {
   const skill = await registry.getSkill(skillId);
   if (!skill.active) throw new Error(`skill ${skillId} is not active`);
   const nftOwner = await registry.ownerOf(skillId);
+  let metadata = {};
+  try { metadata = JSON.parse(skill.metadata || '{}'); } catch { /* legacy */ }
+  // Missing kind → "prompt" for back-compat with existing 8 prompt skills.
+  const kind = metadata.kind === 'agent-skill' ? 'agent-skill' : 'prompt';
   // Price the skill in W0G at parity with its A0GI price
-  return { skill, nftOwner, priceW0G: skill.priceA0GI };
+  return { skill, nftOwner, priceW0G: skill.priceA0GI, metadata, kind };
 }
 
 function buildPaymentRequirements({ skillId, priceW0G, nftOwner }) {
@@ -165,6 +171,171 @@ app.get('/skill/:id', async (req, res) => {
   }
 });
 
+// ─── Shared facilitator + storage helpers ──────────────────────────────────
+
+async function facilitatorVerify(paymentPayload, paymentRequirements) {
+  return fetch(`${FACILITATOR_URL}/verify`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ paymentPayload, paymentRequirements }),
+  }).then(r => r.json());
+}
+
+async function facilitatorSettle(paymentPayload, paymentRequirements) {
+  return fetch(`${FACILITATOR_URL}/settle`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ paymentPayload, paymentRequirements }),
+  }).then(r => r.json());
+}
+
+/** Upload arbitrary bytes to 0G Storage and return the merkle root hash. */
+async function uploadToStorage(bytes) {
+  const memData = new MemData(bytes);
+  const [tree, treeErr] = await memData.merkleTree();
+  if (treeErr) throw new Error(`merkle: ${treeErr}`);
+  const root = tree.rootHash();
+  const [, uploadErr] = await indexer.upload(memData, RPC_URL, wallet);
+  if (uploadErr) throw new Error(`upload: ${uploadErr}`);
+  return root;
+}
+
+// ─── Prompt-skill handler (existing TEE-inference path) ────────────────────
+
+async function handlePromptExecute({ skillId, skillInfo, paymentPayload, paymentRequirements, input, res }) {
+  if (typeof input !== 'string' || input.length === 0) {
+    return res.status(400).json({ error: 'body.input required (non-empty string)' });
+  }
+
+  const vr = await facilitatorVerify(paymentPayload, paymentRequirements);
+  if (!vr.isValid) {
+    return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `verify: ${vr.invalidReason}` });
+  }
+
+  const inf = await runInference({ skill: skillInfo.skill, input, skillId });
+
+  const receipt = {
+    skillId: Number(skillId),
+    kind: 'prompt',
+    input,
+    inputHash: hashInput(input),
+    outputHash: hashOutput(inf.output),
+    chatID: inf.chatID,
+    teeVerified: inf.teeVerified,
+    providerAddress: inf.providerAddress,
+    model: inf.model,
+    nftOwner: skillInfo.nftOwner,
+    payer: vr.payer,
+    paidW0G: ethers.formatEther(skillInfo.priceW0G),
+    network: NETWORK,
+    timestamp: Date.now(),
+    output: inf.output,
+  };
+  const receiptRootHash = await uploadToStorage(new TextEncoder().encode(serializeReceipt(receipt)));
+
+  const sr = await facilitatorSettle(paymentPayload, paymentRequirements);
+  if (!sr.success) {
+    return res.status(502).json({ error: `settle failed after inference: ${sr.error}`, receipt, receiptRootHash });
+  }
+
+  res.set('X-PAYMENT-RESPONSE', Buffer.from(JSON.stringify(sr), 'utf8').toString('base64'));
+  res.json({
+    ok: true,
+    skillId: Number(skillId),
+    output: inf.output,
+    receiptRootHash,
+    settlement: sr,
+  });
+}
+
+// ─── Agent-skill handler (new — pay → fetch → decrypt → verify → deliver) ──
+
+async function handleAgentSkillDownload({ skillId, skillInfo, paymentPayload, paymentRequirements, res }) {
+  const meta = skillInfo.metadata;
+  if (!meta.bundleStorageRoot || !meta.bundleIv || !meta.bundleSha256) {
+    return res.status(500).json({ error: 'agent-skill metadata missing bundle fields' });
+  }
+
+  // 1. Verify payment first — cheaper than fetching from storage on a bad payment.
+  const vr = await facilitatorVerify(paymentPayload, paymentRequirements);
+  if (!vr.isValid) {
+    return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `verify: ${vr.invalidReason}` });
+  }
+
+  // 2. Fetch encrypted bundle from 0G Storage.
+  // The 0G TS SDK's Indexer.download takes (rootHash, outputPath, withProof?).
+  // We need bytes in-memory, not on disk → write to a tmp file then read it back.
+  const tmpPath = path.join(__dirname, `_tmp_bundle_${skillId}_${Date.now()}.bin`);
+  let encryptedBytes;
+  try {
+    const dlErr = await indexer.download(meta.bundleStorageRoot, tmpPath, false);
+    if (dlErr) throw new Error(`download: ${dlErr}`);
+    encryptedBytes = fs.readFileSync(tmpPath);
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+  }
+
+  // 3. Decrypt + integrity check. If sha256 mismatches we DO NOT settle — that
+  //    means storage is corrupted or the metadata was tampered, both of which
+  //    are operator failures and the buyer should not pay.
+  let decrypted;
+  try {
+    decrypted = decryptBuffer({
+      ciphertext: encryptedBytes,
+      iv: meta.bundleIv,
+      algo: meta.bundleAlgo,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: `decrypt failed: ${e.message}` });
+  }
+  const observedSha = sha256Hex(decrypted);
+  if (observedSha.toLowerCase() !== String(meta.bundleSha256).toLowerCase()) {
+    return res.status(500).json({
+      error: 'bundle integrity check failed (sha256 mismatch); not settling',
+      expected: meta.bundleSha256,
+      observed: observedSha,
+    });
+  }
+
+  // 4. Build + upload receipt.
+  const receipt = {
+    skillId: Number(skillId),
+    kind: 'agent-skill',
+    payer: vr.payer,
+    paidW0G: ethers.formatEther(skillInfo.priceW0G),
+    network: NETWORK,
+    bundleStorageRoot: meta.bundleStorageRoot,
+    bundleSha256: meta.bundleSha256,
+    manifest: meta.manifest || [],
+    sizeBytes: meta.sizeBytes || decrypted.length,
+    nftOwner: skillInfo.nftOwner,
+    timestamp: Date.now(),
+  };
+  const receiptRootHash = await uploadToStorage(new TextEncoder().encode(serializeReceipt(receipt)));
+
+  // 5. Settle. If settle fails, tell the buyer (no zip body) so they can retry.
+  const sr = await facilitatorSettle(paymentPayload, paymentRequirements);
+  if (!sr.success) {
+    return res.status(502).json({ error: `settle failed: ${sr.error}`, receiptRootHash });
+  }
+
+  // 6. Deliver the bundle as application/zip. Headers carry the proofs the SDK
+  //    needs to re-verify locally.
+  const filename = (meta.name || `skill-${skillId}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  res.set({
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="${filename}.skill"`,
+    'Content-Length': String(decrypted.length),
+    'X-Skill-Id': String(skillId),
+    'X-Skill-Kind': 'agent-skill',
+    'X-Receipt-Root': receiptRootHash,
+    'X-Bundle-Sha256': meta.bundleSha256,
+    'X-Manifest': Buffer.from(JSON.stringify(receipt.manifest), 'utf8').toString('base64'),
+    'X-PAYMENT-RESPONSE': Buffer.from(JSON.stringify(sr), 'utf8').toString('base64'),
+  });
+  res.end(decrypted);
+}
+
+// ─── Route ──────────────────────────────────────────────────────────────────
+
 app.post('/skill/:id/execute', async (req, res) => {
   const skillId = req.params.id;
   let skillInfo;
@@ -191,69 +362,17 @@ app.post('/skill/:id/execute', async (req, res) => {
     return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `invalid X-PAYMENT: ${e.message}` });
   }
 
-  const { input } = req.body || {};
-  if (typeof input !== 'string' || input.length === 0) {
-    return res.status(400).json({ error: 'body.input required (non-empty string)' });
-  }
-
   try {
-    // 1. Verify payment through facilitator
-    const vr = await fetch(`${FACILITATOR_URL}/verify`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ paymentPayload, paymentRequirements }),
-    }).then(r => r.json());
-    if (!vr.isValid) {
-      return res.status(402).json({ x402Version: 1, accepts: [paymentRequirements], error: `verify: ${vr.invalidReason}` });
+    if (skillInfo.kind === 'agent-skill') {
+      return await handleAgentSkillDownload({ skillId, skillInfo, paymentPayload, paymentRequirements, res });
     }
-
-    // 2. Run inference
-    const inf = await runInference({ skill: skillInfo.skill, input, skillId });
-
-    // 3. Build + upload receipt to 0G Storage
-    const receipt = {
-      skillId: Number(skillId),
-      input,
-      inputHash: hashInput(input),
-      outputHash: hashOutput(inf.output),
-      chatID: inf.chatID,
-      teeVerified: inf.teeVerified,
-      providerAddress: inf.providerAddress,
-      model: inf.model,
-      nftOwner: skillInfo.nftOwner,
-      payer: vr.payer,
-      paidW0G: ethers.formatEther(skillInfo.priceW0G),
-      network: NETWORK,
-      timestamp: Date.now(),
-      output: inf.output,
-    };
-    const bytes = new TextEncoder().encode(serializeReceipt(receipt));
-    const memData = new MemData(bytes);
-    const [tree, treeErr] = await memData.merkleTree();
-    if (treeErr) throw new Error(`merkle: ${treeErr}`);
-    const receiptRootHash = tree.rootHash();
-    const [, uploadErr] = await indexer.upload(memData, RPC_URL, wallet);
-    if (uploadErr) throw new Error(`upload: ${uploadErr}`);
-
-    // 4. Settle W0G via facilitator
-    const sr = await fetch(`${FACILITATOR_URL}/settle`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ paymentPayload, paymentRequirements }),
-    }).then(r => r.json());
-    if (!sr.success) {
-      // We've already run inference — return the result but flag the settle failure.
-      return res.status(502).json({ error: `settle failed after inference: ${sr.error}`, receipt, receiptRootHash });
-    }
-
-    res.set('X-PAYMENT-RESPONSE', Buffer.from(JSON.stringify(sr), 'utf8').toString('base64'));
-    res.json({
-      ok: true,
-      skillId: Number(skillId),
-      output: inf.output,
-      receiptRootHash,
-      settlement: sr,
+    return await handlePromptExecute({
+      skillId, skillInfo, paymentPayload, paymentRequirements,
+      input: req.body?.input,
+      res,
     });
   } catch (e) {
-    console.error('[x402] execute error:', e);
+    console.error(`[x402] execute error (kind=${skillInfo.kind}):`, e);
     res.status(500).json({ error: e.message });
   }
 });

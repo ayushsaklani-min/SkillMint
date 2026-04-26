@@ -18,7 +18,15 @@ import type {
   X402ExecuteResult,
   SkillReceipt,
   ReceiptVerification,
+  AgentSkillMetadata,
+  RegisterAgentSkillResult,
+  DownloadAgentSkillResult,
+  AgentSkillReceipt,
+  AgentSkillReceiptVerification,
 } from "./types.js";
+import { AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL } from "./types.js";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
 
@@ -585,6 +593,20 @@ export class SkillMintClient {
     }
     const autoWrap = opts.autoWrap !== false;
 
+    // 0. Up-front kind guard — refuse to inference-call an agent-skill rather
+    //    than confusingly fail downstream when the response is application/zip.
+    try {
+      const skill = await this.registry.getSkill(skillId);
+      const meta = JSON.parse(String(skill.metadata || "{}"));
+      if (meta.kind === "agent-skill") {
+        throw new Error(`skill #${skillId} is an agent-skill — call downloadAgentSkill() instead of executeX402()`);
+      }
+    } catch (e) {
+      // Re-throw the kind error; swallow other read-skill failures so the
+      // existing probe path still produces a useful network-level error.
+      if ((e as Error).message?.includes("agent-skill")) throw e;
+    }
+
     // 1. Probe — expect 402 with paymentRequirements
     const probeUrl = `${base}/skill/${skillId}/execute`;
     let probe: Response;
@@ -646,6 +668,199 @@ export class SkillMintClient {
     };
   }
 
+  // ─── Agent skills (folder-bundle x402 flow) ────────────────────────────────
+
+  /**
+   * Publish an agent-skill: a Claude/Codex-style folder bundle (`.skill` zip)
+   * sold per-download. Encrypts the bundle through the oracle, anchors a
+   * sha256 commitment + storage root in the on-chain skill metadata.
+   *
+   * @param params.bundle  Bundle bytes — Buffer/Uint8Array, or filesystem path string.
+   * @param params.price   W0G charged per download.
+   */
+  async registerAgentSkill(params: {
+    bundle: Buffer | Uint8Array | string;
+    name: string;
+    description: string;
+    price: string;
+    format?: "claude-skill";
+    compatibleWith?: string[];
+  }): Promise<RegisterAgentSkillResult> {
+    // Materialise the bundle bytes.
+    const bytes: Buffer = typeof params.bundle === "string"
+      ? readFileSync(params.bundle)
+      : Buffer.isBuffer(params.bundle) ? params.bundle : Buffer.from(params.bundle);
+
+    // Multipart upload to the oracle. The oracle validates, encrypts, uploads
+    // ciphertext to 0G Storage, and returns the integrity commitments.
+    const form = new FormData();
+    const blob = new Blob([new Uint8Array(bytes)], { type: "application/zip" });
+    form.append("bundle", blob, `${params.name}.skill`);
+    form.append("name", params.name);
+
+    const url = `${this.oracleUrl}/encrypt-bundle`;
+    let res: Response;
+    try {
+      res = await fetch(url, { method: "POST", body: form });
+    } catch (e) {
+      throw new Error(`registerAgentSkill: network error reaching ${url} — ${(e as Error).message}. Pass {oracleUrl} to SkillMintClient() to override the default.`);
+    }
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`registerAgentSkill: oracle responded ${res.status} — ${body.slice(0, 400)}`);
+    }
+    const enc = (await res.json()) as {
+      storageRoot: string; iv: string; algo: "aes-256-gcm"; keyId: string;
+      sha256: string; manifest: string[]; sizeBytes: number;
+    };
+
+    // Build on-chain metadata.
+    const metadata: AgentSkillMetadata = {
+      kind: "agent-skill",
+      name: params.name,
+      description: params.description,
+      bundleStorageRoot: enc.storageRoot,
+      bundleIv: enc.iv,
+      bundleAlgo: enc.algo,
+      keyId: enc.keyId,
+      bundleSha256: enc.sha256,
+      sizeBytes: enc.sizeBytes,
+      manifest: enc.manifest,
+      ...(params.format ? { format: params.format } : {}),
+      ...(params.compatibleWith ? { compatibleWith: params.compatibleWith } : {}),
+    };
+
+    // Mint the NFT. promptHash = bundleSha256 (it IS the cryptographic
+    // commitment to the prompt-equivalent for this skill kind).
+    const tx = await this.registry.registerSkill(
+      enc.sha256,
+      AGENT_SKILL_PROVIDER,
+      AGENT_SKILL_MODEL,
+      ethers.parseEther(params.price),
+      JSON.stringify(metadata)
+    );
+    await tx.wait();
+    const skillId = Number(await this.registry.skillCount());
+    return {
+      skillId,
+      txHash: tx.hash,
+      bundleStorageRoot: enc.storageRoot,
+      bundleSha256: enc.sha256,
+    };
+  }
+
+  /**
+   * Buy + download an agent-skill. Pays via x402 (W0G), recomputes sha256
+   * locally to detect any tampering, optionally extracts the zip to disk.
+   */
+  async downloadAgentSkill(
+    skillIdOrName: number | string,
+    opts: { autoWrap?: boolean; extractTo?: string } = {}
+  ): Promise<DownloadAgentSkillResult> {
+    // Resolve to a numeric id.
+    let skillId: number;
+    if (typeof skillIdOrName === "number") {
+      skillId = skillIdOrName;
+    } else if (/^\d+$/.test(skillIdOrName)) {
+      skillId = Number(skillIdOrName);
+    } else {
+      const resolved = await this.resolveSkill(skillIdOrName);
+      if (!resolved) throw new Error(`downloadAgentSkill: no skill matched "${skillIdOrName}"`);
+      skillId = resolved.id;
+    }
+    const autoWrap = opts.autoWrap !== false;
+    const base = this.x402Url;
+
+    // 1. Probe → 402 with payment requirements.
+    const probeUrl = `${base}/skill/${skillId}/execute`;
+    let probe: Response;
+    try {
+      probe = await fetch(probeUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    } catch (e) {
+      throw new Error(`downloadAgentSkill probe: network error reaching ${probeUrl} — ${(e as Error).message}.`);
+    }
+    if (probe.status !== 402) {
+      throw new Error(`downloadAgentSkill: expected 402 on probe, got ${probe.status} ${await probe.text()}`);
+    }
+    const challenge = (await probe.json()) as { accepts?: PaymentRequirements[] };
+    const requirements = challenge.accepts?.[0];
+    if (!requirements) throw new Error("downloadAgentSkill: no paymentRequirements in 402 body");
+    if (requirements.asset.toLowerCase() !== this.network.w0g.toLowerCase()) {
+      throw new Error(`downloadAgentSkill: asset ${requirements.asset} != SDK W0G ${this.network.w0g}`);
+    }
+
+    // 2. Ensure W0G balance.
+    const need = BigInt(requirements.maxAmountRequired);
+    const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
+    if (bal < need) {
+      if (!autoWrap) {
+        throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+      }
+      const short = need - bal + ethers.parseEther("0.0005");
+      await this.wrapW0G(ethers.formatEther(short));
+    }
+
+    // 3. Sign + retry. Response is application/zip + integrity headers.
+    const paymentPayload = await this.signPaymentAuthorization(requirements);
+    const header = Buffer.from(JSON.stringify(paymentPayload), "utf8").toString("base64");
+    const r = await fetch(`${base}/skill/${skillId}/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-payment": header },
+      body: "{}",
+    });
+    if (r.status !== 200) {
+      let body = "";
+      try { body = await r.text(); } catch { /* ignore */ }
+      throw new Error(`downloadAgentSkill: ${r.status} ${body.slice(0, 400)}`);
+    }
+    const ct = r.headers.get("content-type") || "";
+    if (!ct.includes("application/zip")) {
+      throw new Error(`downloadAgentSkill: unexpected content-type "${ct}" — server returned a non-zip payload`);
+    }
+    const bundle = Buffer.from(await r.arrayBuffer());
+    const expectedSha = (r.headers.get("x-bundle-sha256") || "").toLowerCase();
+    const observedSha = "0x" + createHash("sha256").update(bundle).digest("hex");
+    if (expectedSha && expectedSha !== observedSha) {
+      throw new Error(`downloadAgentSkill: sha256 mismatch — server claimed ${expectedSha} but bundle hashes to ${observedSha}`);
+    }
+
+    let manifest: string[] = [];
+    try {
+      const b64 = r.headers.get("x-manifest");
+      if (b64) manifest = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+    } catch { /* keep empty */ }
+
+    const settlementB64 = r.headers.get("x-payment-response");
+    let settlement = { transaction: "", network: requirements.network, payer: this.wallet.address };
+    if (settlementB64) {
+      try { settlement = JSON.parse(Buffer.from(settlementB64, "base64").toString("utf8")); }
+      catch { /* keep defaults */ }
+    }
+
+    if (opts.extractTo) {
+      // Lazy-import adm-zip so callers who never extract don't pay the dep cost.
+      const AdmZip = (await import("adm-zip")).default;
+      const zip = new AdmZip(bundle);
+      zip.extractAllTo(opts.extractTo, /*overwrite*/ true);
+    }
+
+    return {
+      skillId,
+      bundle,
+      manifest,
+      sizeBytes: bundle.length,
+      bundleSha256: observedSha,
+      receiptRootHash: r.headers.get("x-receipt-root") || "",
+      settlement,
+      payer: settlement.payer,
+      paidW0G: ethers.formatEther(need),
+    };
+  }
+
   // ─── Receipts (fetch + verify) ─────────────────────────────────────────────
 
   /**
@@ -661,20 +876,40 @@ export class SkillMintClient {
   }
 
   /**
-   * Recompute input/output hashes from the receipt contents and compare
-   * against the hashes the receipt itself commits to. Also surfaces the
-   * receipt's own `teeVerified` flag. All three must be true for a
-   * receipt to be considered valid.
+   * Re-verify a receipt against its committed contents.
+   *
+   * Prompt receipts: recomputes input/output keccak256 + checks the TEE flag.
+   * Agent-skill receipts: requires `opts.bundle` so we can sha256 the bytes
+   * the caller actually holds and compare against the receipt's commitment.
    */
-  verifyReceipt(receipt: SkillReceipt): ReceiptVerification {
+  verifyReceipt(
+    receipt: SkillReceipt | AgentSkillReceipt,
+    opts?: { bundle?: Buffer | Uint8Array }
+  ): ReceiptVerification | AgentSkillReceiptVerification {
+    if ((receipt as AgentSkillReceipt).kind === "agent-skill") {
+      const r = receipt as AgentSkillReceipt;
+      if (!opts?.bundle) {
+        throw new Error(
+          "verifyReceipt: agent-skill receipt requires opts.bundle to verify integrity. " +
+          "Pass the bundle bytes you downloaded so we can re-hash them."
+        );
+      }
+      const buf = Buffer.isBuffer(opts.bundle) ? opts.bundle : Buffer.from(opts.bundle);
+      const observed = "0x" + createHash("sha256").update(buf).digest("hex");
+      const sha256Ok = observed.toLowerCase() === String(r.bundleSha256).toLowerCase();
+      return { kind: "agent-skill", sha256Ok, valid: sha256Ok };
+    }
+
+    const r = receipt as SkillReceipt;
     const inputHashOk =
-      ethers.keccak256(ethers.toUtf8Bytes(receipt.input)).toLowerCase() ===
-      receipt.inputHash.toLowerCase();
+      ethers.keccak256(ethers.toUtf8Bytes(r.input)).toLowerCase() ===
+      r.inputHash.toLowerCase();
     const outputHashOk =
-      ethers.keccak256(ethers.toUtf8Bytes(receipt.output)).toLowerCase() ===
-      receipt.outputHash.toLowerCase();
-    const teeVerified = !!receipt.teeVerified;
+      ethers.keccak256(ethers.toUtf8Bytes(r.output)).toLowerCase() ===
+      r.outputHash.toLowerCase();
+    const teeVerified = !!r.teeVerified;
     return {
+      kind: "prompt",
       inputHashOk,
       outputHashOk,
       teeVerified,
