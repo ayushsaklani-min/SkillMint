@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { href: "/verify", label: "Verify" },
   { href: "/publish", label: "Publish" },
   { href: "/explainer", label: "Explainer" },
-  { href: "https://github.com/ayushsaklani-min/SkillMint#agent-sdk", label: "SDK", external: true },
 ];
 
 export default function Navbar() {
