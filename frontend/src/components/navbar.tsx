@@ -139,10 +139,8 @@ export default function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              target={link.external ? "_blank" : undefined}
-              rel={link.external ? "noopener noreferrer" : undefined}
               className={`px-5 py-2 font-display text-sm tracking-tight border-2 border-black rounded-full transition-all btn-brutal ${
-                !link.external && isActive(link.href)
+                isActive(link.href)
                   ? "bg-[#D4FF00] text-black shadow-brutal-sm"
                   : "bg-white text-black shadow-brutal-sm"
               }`}
@@ -237,11 +235,9 @@ export default function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              target={link.external ? "_blank" : undefined}
-              rel={link.external ? "noopener noreferrer" : undefined}
               onClick={() => setMobileOpen(false)}
               className={`block px-4 py-3 font-display text-base tracking-tight border-2 border-black rounded-full text-center ${
-                !link.external && isActive(link.href) ? "bg-[#D4FF00] text-black" : "bg-white text-black"
+                isActive(link.href) ? "bg-[#D4FF00] text-black" : "bg-white text-black"
               }`}
             >
               {link.label.toUpperCase()}
