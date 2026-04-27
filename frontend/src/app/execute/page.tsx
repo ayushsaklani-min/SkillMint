@@ -220,6 +220,16 @@ function ExecuteContent() {
       const signer = await browserProvider.getSigner();
       const addr = await signer.getAddress();
       setWalletAddr(addr);
+      // Pre-flight balance check. 0G's RPC surfaces "not enough native to cover
+      // the value send" as a generic revert (no INSUFFICIENT_FUNDS code), so we
+      // catch it before the wallet pops up to keep the UX honest.
+      const balance = await browserProvider.getBalance(addr);
+      const gasBuffer = ethers.parseEther("0.0005"); // tiny native cushion for gas
+      if (balance < skill.priceWei + gasBuffer) {
+        const have = Number(ethers.formatEther(balance)).toFixed(4);
+        const need = Number(ethers.formatEther(skill.priceWei + gasBuffer)).toFixed(4);
+        throw new Error(`Not enough 0G — you have ${have}, need ~${need} (price + gas). Top up your wallet and retry.`);
+      }
       setExec((prev) => ({ ...prev, phase: "sending" }));
       const escrow = new ethers.Contract(NETWORK.escrow, ESCROW_ABI, signer);
       const inputHash = hashInput(userInput);
@@ -426,12 +436,24 @@ function ExecuteContent() {
                 <div className="flex-1 min-w-0">
                   <h4 className="font-display text-base mb-1">EXECUTION FAILED</h4>
                   <p className="text-sm text-black/80 break-words">{exec.error}</p>
-                  <button
-                    onClick={() => setExec(INITIAL_STATE)}
-                    className="mt-3 inline-block bg-black text-white font-display text-xs px-3 py-1.5 border-2 border-black rounded-full hover:bg-[#0038FF]"
-                  >
-                    DISMISS
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {/^Not enough 0G/.test(exec.error) && (
+                      <a
+                        href="https://hub.0g.ai/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block bg-[#D4FF00] text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full hover:bg-white"
+                      >
+                        GET 0G →
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setExec(INITIAL_STATE)}
+                      className="inline-block bg-black text-white font-display text-xs px-3 py-1.5 border-2 border-black rounded-full hover:bg-[#0038FF]"
+                    >
+                      DISMISS
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
