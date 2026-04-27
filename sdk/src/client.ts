@@ -75,13 +75,14 @@ export class SkillMintClient {
   readonly x402Url: string;
 
   constructor(options: SkillMintOptions) {
-    // Resolve network config
+    // Resolve network config — defaults to mainnet (0G Aristotle, chainId 16661).
+    // Pass network: "testnet" to target Galileo testnet for development.
     if (typeof options.network === "object") {
       this.network = options.network;
-    } else if (options.network === "mainnet") {
-      this.network = MAINNET;
-    } else {
+    } else if (options.network === "testnet") {
       this.network = TESTNET;
+    } else {
+      this.network = MAINNET;
     }
 
     const rpcUrl = options.rpcUrl || this.network.rpcUrl;

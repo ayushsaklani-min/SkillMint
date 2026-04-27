@@ -1,6 +1,6 @@
 {
   "name": "@skillmint/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "SDK for agents to discover, execute, pay (x402 + W0G), and verify AI skills on SkillMint (0G Chain). Supports prompt skills (TEE-attested inference) and agent skills (Claude/Codex folder bundles).",
   "type": "module",
   "main": "dist/index.js",

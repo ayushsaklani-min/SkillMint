@@ -118,7 +118,7 @@ export interface RevenueInfo {
 export interface SkillMintOptions {
   /** Private key for signing transactions */
   privateKey: string;
-  /** Network: "testnet" | "mainnet" or a custom NetworkConfig */
+  /** Network: "mainnet" (default) | "testnet" | custom NetworkConfig */
   network?: "testnet" | "mainnet" | NetworkConfig;
   /** Custom RPC URL (overrides network default) */
   rpcUrl?: string;
