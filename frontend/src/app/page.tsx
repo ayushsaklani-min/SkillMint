@@ -298,6 +298,9 @@ export default function HomePage() {
 
       for (let i = 1; i <= count; i++) {
         const skill = await registry.getSkill(i);
+        // Hide deactivated skills from the public explore grid. Detail page
+        // (/skill/:id) still resolves so existing links keep working.
+        if (!skill.active) continue;
         const [total, successful, rate] = await registry.getReputationScore(i);
         const owner = await registry.ownerOf(i);
         let meta: { name?: string; description?: string; kind?: SkillKind } = {};
@@ -336,7 +339,9 @@ export default function HomePage() {
 
       setSkills(loaded);
       setStats({
-        skillCount: count,
+        // Show count of *active* skills, not lifetime mints, so the headline
+        // stat matches the visible grid.
+        skillCount: loaded.length,
         totalExecutions: totalExecs,
         totalRevenue: Number(ethers.formatEther(totalRevWei)).toFixed(3),
       });
