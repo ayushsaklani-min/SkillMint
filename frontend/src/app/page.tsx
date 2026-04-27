@@ -217,7 +217,7 @@ function SdkCodeWindow() {
 
 `}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
   privateKey: process.env.PRIVATE_KEY!,
-  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
+  network:    `}<span className="text-[#D4FF00]">{`"mainnet"`}</span>{`,
 });
 
 `}<span className="text-white/40">{`// 1. discover`}</span>{`
@@ -240,7 +240,7 @@ client.`}<span className="text-[#28C840]">{`verifyReceipt`}</span>{`(rec);
 
 `}<span className="text-[#FF5F57]">{`const`}</span>{` `}<span className="text-[#28C840]">{`client`}</span>{` = `}<span className="text-[#FF5F57]">{`new`}</span>{` `}<span className="text-white">{`SkillMintClient`}</span>{`({
   privateKey: process.env.PRIVATE_KEY!,
-  network:    `}<span className="text-[#D4FF00]">{`"testnet"`}</span>{`,
+  network:    `}<span className="text-[#D4FF00]">{`"mainnet"`}</span>{`,
 });
 
 `}<span className="text-white/40">{`// 1. pay W0G + download — sha256 verified locally`}</span>{`
@@ -382,7 +382,7 @@ export default function HomePage() {
           <FadeIn className="flex justify-center mb-8">
             <div className="flex items-center gap-2 bg-black text-[#D4FF00] font-mono text-xs font-bold px-4 py-2 border-2 border-black rounded-full">
               <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse-dot" />
-              TESTNET LIVE · MAINNET NEXT
+              LIVE ON 0G ARISTOTLE MAINNET
             </div>
           </FadeIn>
 

@@ -4,7 +4,11 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
+// Mainnet by default; override with NEXT_PUBLIC_NETWORK=testnet for Galileo.
+const INDEXER_URL =
+  (process.env.NEXT_PUBLIC_NETWORK || "").toLowerCase() === "testnet"
+    ? "https://indexer-storage-testnet-turbo.0g.ai"
+    : "https://indexer-storage-turbo.0g.ai";
 
 export async function GET(req: NextRequest) {
   const hash = req.nextUrl.searchParams.get("hash");

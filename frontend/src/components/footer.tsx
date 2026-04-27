@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { NETWORK } from "@/lib/contracts";
 
 export default function Footer() {
   return (
@@ -51,12 +52,12 @@ export default function Footer() {
             <h4 className="font-display text-sm tracking-widest text-[#D4FF00] mb-4">RESOURCES</h4>
             <ul className="space-y-2.5 text-sm text-white/80">
               <li>
-                <a href="https://chainscan-galileo.0g.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[#D4FF00] transition-colors">
+                <a href={NETWORK.chainScan} target="_blank" rel="noopener noreferrer" className="hover:text-[#D4FF00] transition-colors">
                   0G ChainScan →
                 </a>
               </li>
               <li>
-                <a href="https://storagescan-galileo.0g.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[#D4FF00] transition-colors">
+                <a href={NETWORK.storageScan} target="_blank" rel="noopener noreferrer" className="hover:text-[#D4FF00] transition-colors">
                   StorageScan →
                 </a>
               </li>
@@ -71,7 +72,7 @@ export default function Footer() {
 
         <div className="mt-14 pt-6 border-t-2 border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono font-bold tracking-widest">
           <span className="text-white/50">SKILLMINT PROTOCOL · VERIFIED AI SKILL EXECUTION</span>
-          <span className="text-[#D4FF00]">0G GALILEO TESTNET</span>
+          <span className="text-[#D4FF00]">{NETWORK.chainId === 16661 ? "0G ARISTOTLE MAINNET" : "0G GALILEO TESTNET"}</span>
         </div>
       </div>
     </footer>

@@ -23,10 +23,11 @@ export const MAINNET = {
   x402Network: "0g-mainnet",
 };
 
-// Public-facing network — flip to MAINNET to switch UI to 0G Aristotle.
-// `NEXT_PUBLIC_NETWORK=mainnet` env var lets Vercel preview both without code change.
+// Public-facing network — flip to TESTNET to switch UI to 0G Galileo.
+// Mainnet is the default; set NEXT_PUBLIC_NETWORK=testnet to revert.
+// trim() guards against shell-piped values that smuggle in \n or \r\n.
 export const NETWORK =
-  (process.env.NEXT_PUBLIC_NETWORK || "").toLowerCase() === "mainnet" ? MAINNET : TESTNET;
+  (process.env.NEXT_PUBLIC_NETWORK || "").trim().toLowerCase() === "testnet" ? TESTNET : MAINNET;
 
 // ─── Agent-skill sentinels (matches sdk/src/types.ts) ────────────────────
 // Contract requires non-zero computeProvider + non-empty model. Agent-skills

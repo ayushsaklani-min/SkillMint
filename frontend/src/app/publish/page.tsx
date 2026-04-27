@@ -17,11 +17,13 @@ const stepsForKind = (k: Kind) => [
   { num: 4, title: "REVIEW" },
 ];
 
+// Live TEE-attested mainnet models (0G Aristotle). Cheapest on top so it's the
+// default selection — keeps publish flow gas-cheap unless creators upgrade.
 const MODELS = [
-  { value: "qwen/qwen-2.5-7b-instruct", label: "Qwen 2.5 7B", network: "Testnet" },
-  { value: "deepseek-chat-v3-0324", label: "DeepSeek v3", network: "Mainnet" },
-  { value: "gpt-oss-120b", label: "GPT-OSS 120B", network: "Mainnet" },
-  { value: "qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B", network: "Mainnet" },
+  { value: "qwen/qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B", network: "Mainnet" },
+  { value: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek v3", network: "Mainnet" },
+  { value: "zai-org/GLM-5-FP8", label: "GLM-5 FP8", network: "Mainnet" },
+  { value: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini", network: "Mainnet" },
 ];
 
 const COMPAT = ["claude-code", "cursor", "codex"] as const;
@@ -39,8 +41,10 @@ export default function PublishPage() {
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [price, setPrice] = useState("0.001");
-  const [model, setModel] = useState("qwen/qwen-2.5-7b-instruct");
-  const [computeProvider, setComputeProvider] = useState("0xa48f01287233509FD694a22Bf840225062E67836");
+  const [model, setModel] = useState("qwen/qwen3-vl-30b-a3b-instruct");
+  // Mainnet qwen3-vl-30b provider (cheapest TEE chat on 0G Aristotle).
+  // Override via the Publish UI if you want a different model/provider.
+  const [computeProvider, setComputeProvider] = useState("0x4415ef5CBb415347bb18493af7cE01f225Fc0868");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ skillId: string; txHash: string; nftOwner: string; kind: Kind } | null>(null);
   const [error, setError] = useState("");
@@ -81,7 +85,7 @@ export default function PublishPage() {
         method: "wallet_addEthereumChain",
         params: [{
           chainId: `0x${NETWORK.chainId.toString(16)}`,
-          chainName: "0G Testnet",
+          chainName: NETWORK.chainId === 16661 ? "0G Aristotle Mainnet" : "0G Testnet",
           rpcUrls: [NETWORK.rpcUrl],
           blockExplorerUrls: [NETWORK.chainScan],
           nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },

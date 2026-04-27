@@ -93,7 +93,7 @@ export default function Navbar() {
             params: [
               {
                 chainId: `0x${NETWORK.chainId.toString(16)}`,
-                chainName: "0G Galileo Testnet",
+                chainName: NETWORK.chainId === 16661 ? "0G Aristotle Mainnet" : "0G Galileo Testnet",
                 rpcUrls: [NETWORK.rpcUrl],
                 blockExplorerUrls: [NETWORK.chainScan],
                 nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
