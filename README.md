@@ -10,14 +10,14 @@
 
 <br/>
 
-![Built on 0G](https://img.shields.io/badge/BUILT_ON-0G_GALILEO-0038FF?style=for-the-badge&labelColor=000000)
+![Built on 0G](https://img.shields.io/badge/BUILT_ON-0G_ARISTOTLE_MAINNET-0038FF?style=for-the-badge&labelColor=000000)
 ![TEE Attested](https://img.shields.io/badge/TEE-ATTESTED-D4FF00?style=for-the-badge&labelColor=000000)
 ![Hackathon](https://img.shields.io/badge/0G_APAC-HACKATHON_2026-0038FF?style=for-the-badge&labelColor=000000)
-![Status](https://img.shields.io/badge/STATUS-LIVE-D4FF00?style=for-the-badge&labelColor=000000)
+![Status](https://img.shields.io/badge/STATUS-LIVE_ON_MAINNET-D4FF00?style=for-the-badge&labelColor=000000)
 
 <br/>
 
-**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan-galileo.0g.ai)** · **[📂 0G StorageScan](https://storagescan-galileo.0g.ai)**
+**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan.0g.ai)** · **[📂 0G StorageScan](https://storagescan.0g.ai)**
 
 </div>
 
@@ -108,8 +108,9 @@ cd oracle && npm install && cp .env.example .env && npm start
 # Contracts — tests
 cd contracts && npm install && npx hardhat test
 
-# Deploy to 0G Galileo
-cd contracts && npx hardhat run scripts/deploy-v2.js --network galileo
+# Deploy to 0G Aristotle Mainnet
+cd contracts && npx hardhat run scripts/deploy-v2.js --network mainnet
+# (or --network testnet for Galileo)
 ```
 
 ## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
@@ -129,7 +130,7 @@ import { SkillMintClient } from "@skillmint/sdk";
 
 const client = new SkillMintClient({
   privateKey: process.env.PRIVATE_KEY!,
-  network: "testnet",
+  network: "mainnet",   // default — pass "testnet" for Galileo
 });
 
 // 1. Discover
@@ -138,8 +139,8 @@ const skills = await client.listSkills();
 // 2. Execute via x402 — auto-wraps native 0G into W0G if balance is short,
 //    signs an EIP-3009 authorization, settles on-chain, returns the output.
 const result = await client.executeX402(
-  15,                                                  // skillId
-  "pragma solidity ^0.8.0; contract A { /* ... */ }"   // input
+  2,                                                   // skillId — "0G Expert" on mainnet
+  "How do I deploy a contract to 0G chain using hardhat?"
 );
 console.log(result.output);
 console.log("settle tx :", result.settlement.transaction);
@@ -201,18 +202,30 @@ Runnable end-to-end examples — discovers skills, picks one, pays via x402, ver
 
 ## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
-> **Status:** ![Testnet](https://img.shields.io/badge/TESTNET-LIVE-20C20E?style=flat-square&labelColor=000000) · ![Mainnet](https://img.shields.io/badge/0G_MAINNET-NEXT-D4FF00?style=flat-square&labelColor=000000) — actively running on 0G Galileo Testnet. Mainnet contracts deploy as the next milestone.
+> **Status:** ![Mainnet](https://img.shields.io/badge/0G_ARISTOTLE_MAINNET-LIVE-20C20E?style=flat-square&labelColor=000000) · ![Testnet](https://img.shields.io/badge/0G_GALILEO-AVAILABLE-D4FF00?style=flat-square&labelColor=000000) — running on **0G Aristotle Mainnet** (chainId `16661`). Testnet `16602` still supported via `network: "testnet"`.
 >
-> **Live agent-skill demo:** `fhenix-dev` (FHE blockchain knowledge bundle) is published as skill #21 — `await client.downloadAgentSkill(21)` to buy + verify it end-to-end.
+> **Live mainnet skills (TEE-attested via qwen3-vl-30b):**
+> - `#2` — **0G Expert** ([buy](https://skillmint-0g.vercel.app/skill/2))
+> - `#3` — **Fhenix Expert** ([buy](https://skillmint-0g.vercel.app/skill/3))
 
-| Component | Where |
-|-----------|-------|
+### Mainnet (0G Aristotle · chainId 16661)
+
+| Component | Address |
+|-----------|---------|
 | **Frontend** | [`skillmint-0g.vercel.app`](https://skillmint-0g.vercel.app) · Vercel |
 | **Oracle / Facilitator / x402 server** | AWS EC2 · `ap-south-1` · systemd |
-| **SkillRegistryV2** | `0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4) |
-| **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
-| **W0G** (Wrapped 0G · EIP-3009) | `0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D` · [0G ChainScan](https://chainscan-galileo.0g.ai/address/0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D) |
-| **Network** | 0G Galileo Testnet · Chain ID `16602` (mainnet `16661` next) |
+| **SkillRegistryV2** | `0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09` · [ChainScan](https://chainscan.0g.ai/address/0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09) |
+| **SkillEscrowV2** | `0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5` · [ChainScan](https://chainscan.0g.ai/address/0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5) |
+| **DemoW0G** (Wrapped 0G · EIP-3009) | `0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01` · [ChainScan](https://chainscan.0g.ai/address/0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01) |
+| **TEE compute** | qwen3-vl-30b · deepseek-v3 · GLM-5-FP8 · gpt-5.4-mini |
+
+### Testnet (0G Galileo · chainId 16602 · still supported)
+
+| Component | Address |
+|-----------|---------|
+| **SkillRegistryV2** | `0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4) |
+| **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
+| **W0G** (Wrapped 0G · EIP-3009) | `0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D) |
 
 ## ![DESIGN](https://img.shields.io/badge/🎨-DESIGN-0038FF?style=for-the-badge&labelColor=000000)
 
