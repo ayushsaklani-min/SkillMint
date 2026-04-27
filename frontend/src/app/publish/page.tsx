@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL } from "@/lib/contracts";
 import { hashPrompt } from "@/lib/hash";
+import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -71,7 +72,7 @@ export default function PublishPage() {
       setBundleManifest(sorted.slice(0, 20));
       if (!name) setName(file.name.replace(/\.(skill|zip)$/i, ""));
     } catch (e) {
-      setBundleErr(`could not open zip: ${e instanceof Error ? e.message : "unknown"}`);
+      setBundleErr(`Couldn't open zip: ${parseError(e)}`);
     }
   }
 
@@ -137,8 +138,7 @@ export default function PublishPage() {
       const skillCount = await registry.skillCount();
       setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "prompt" });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg.includes("user rejected") ? "Transaction rejected by user" : msg);
+      setError(parseError(err, "Couldn't publish skill."));
     } finally {
       setLoading(false);
     }

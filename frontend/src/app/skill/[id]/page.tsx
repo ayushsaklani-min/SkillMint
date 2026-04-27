@@ -7,6 +7,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { downloadAgentSkillBrowser, downloadBytes } from "@/lib/x402";
+import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -78,7 +79,7 @@ export default function SkillPage() {
       setBuyResult({ tx: dl.settlement.transaction, receiptRoot: dl.receiptRootHash, sha256: dl.bundleSha256, size: dl.bundle.length });
       setBuyState("done");
     } catch (e) {
-      setBuyErr(e instanceof Error ? e.message : "download failed");
+      setBuyErr(parseError(e, "Download failed."));
       setBuyState("idle");
     }
   }
@@ -138,7 +139,7 @@ export default function SkillPage() {
       );
       setRecentExecs(execs);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load skill");
+      setError(parseError(err, "Couldn't load this skill."));
     } finally {
       setLoading(false);
     }

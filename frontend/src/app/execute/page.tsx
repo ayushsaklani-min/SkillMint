@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { hashInput } from "@/lib/hash";
 import { downloadAgentSkillBrowser, downloadBytes } from "@/lib/x402";
+import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -101,7 +102,7 @@ function ExecuteContent() {
       });
       setBundleState("done");
     } catch (e) {
-      setBundleErr(e instanceof Error ? e.message : "download failed");
+      setBundleErr(parseError(e, "Download failed."));
       setBundleState("idle");
     }
   }
@@ -186,6 +187,16 @@ function ExecuteContent() {
     setReceiptData(null);
     const skill = skills.find((s) => s.id === selectedSkill);
     if (!skill) return;
+    // Client-side guards: surface a clean message before the wallet bothers
+    // the user with a contract-revert dialog.
+    if (!skill.active) {
+      setExec((prev) => ({ ...prev, phase: "error", error: "This skill is currently inactive. Pick another one." }));
+      return;
+    }
+    if (!userInput.trim()) {
+      setExec((prev) => ({ ...prev, phase: "error", error: "Type something to send to the skill first." }));
+      return;
+    }
     try {
       setExec((prev) => ({ ...prev, phase: "connecting", submittedInput: userInput, skillName: skill.name }));
       if (!window.ethereum) throw new Error("MetaMask not found.");
@@ -235,9 +246,7 @@ function ExecuteContent() {
       }
       pollStatus(executionId);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      const cleanMsg = message.includes("user rejected") ? "Transaction rejected by user" : message;
-      setExec((prev) => ({ ...prev, phase: "error", error: cleanMsg }));
+      setExec((prev) => ({ ...prev, phase: "error", error: parseError(err, "Couldn't send execution.") }));
     }
   }
 
@@ -414,9 +423,15 @@ function ExecuteContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <h4 className="font-display text-base mb-1">EXECUTION FAILED</h4>
-                  <p className="text-sm text-black/80">{exec.error}</p>
+                  <p className="text-sm text-black/80 break-words">{exec.error}</p>
+                  <button
+                    onClick={() => setExec(INITIAL_STATE)}
+                    className="mt-3 inline-block bg-black text-white font-display text-xs px-3 py-1.5 border-2 border-black rounded-full hover:bg-[#0038FF]"
+                  >
+                    DISMISS
+                  </button>
                 </div>
               </div>
             </motion.div>

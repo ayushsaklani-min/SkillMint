@@ -7,6 +7,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { hashInput } from "@/lib/hash";
+import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -114,7 +115,7 @@ function VerifyContent() {
 
       setChecks({ rootMatch, inputHashOnChain, inputRecompute, outputRecompute });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(parseError(err, "Couldn't verify this receipt."));
     } finally {
       setLoading(false);
     }
