@@ -13,7 +13,7 @@ ORACLE_KEY_ID=$(aws ssm get-parameter --region "$REGION" --name /skillmint/oracl
 umask 077
 cat > "$ENV_FILE" <<EOF
 PRIVATE_KEY=$PRIVATE_KEY
-NETWORK=testnet
+NETWORK=mainnet
 ORACLE_KEY=$ORACLE_KEY
 ORACLE_KEY_ID=$ORACLE_KEY_ID
 ORACLE_API_PORT=3001

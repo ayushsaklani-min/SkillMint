@@ -1,0 +1,14 @@
+{
+  "network": "0g-mainnet",
+  "chainId": 16661,
+  "rpcUrl": "https://evmrpc.0g.ai",
+  "chainScan": "https://chainscan.0g.ai",
+  "storageIndexer": "https://indexer-storage-turbo.0g.ai",
+  "deployer": "0xCa475D10C7eDa1678D1182c72ad750a405127845",
+  "contracts": {
+    "registry": "0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09",
+    "escrow":   "0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5",
+    "w0g":      "0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01"
+  },
+  "deployedAt": "2026-04-27"
+}

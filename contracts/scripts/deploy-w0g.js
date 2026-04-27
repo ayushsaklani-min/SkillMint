@@ -16,7 +16,7 @@ async function main() {
   console.log('W0G deployed:', addr);
 
   // ─── Smoke test: wrap → unwrap ───────────────────────────────────────────
-  const amount = ethers.parseEther('0.01');
+  const amount = ethers.parseEther('0.001');
   console.log(`\nSmoke test — wrap ${ethers.formatEther(amount)} native …`);
   const txDep = await w0g.deposit({ value: amount });
   await txDep.wait();

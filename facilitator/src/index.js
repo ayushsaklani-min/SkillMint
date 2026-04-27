@@ -21,7 +21,7 @@ const RPC_URL = process.env.RPC_URL || (NETWORK === '0g-mainnet'
   ? 'https://evmrpc.0g.ai'
   : 'https://evmrpc-testnet.0g.ai');
 const W0G_ADDR = process.env.W0G_ADDRESS || (NETWORK === '0g-mainnet'
-  ? '0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c'
+  ? '0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01'
   : '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D');
 
 if (!(NETWORK in SUPPORTED_NETWORKS)) throw new Error(`unsupported NETWORK ${NETWORK}`);

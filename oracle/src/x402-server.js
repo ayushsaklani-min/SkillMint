@@ -42,10 +42,11 @@ const INDEXER_URL = IS_TESTNET
   : 'https://indexer-storage-turbo.0g.ai';
 const REGISTRY_ADDR = IS_TESTNET
   ? '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'
-  : '';
+  : '0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09';
+// SkillMint DemoW0G (EIP-3009 enabled). Override via W0G_ADDRESS env if needed.
 const W0G_ADDR = process.env.W0G_ADDRESS || (IS_TESTNET
   ? '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D'
-  : '0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c');
+  : '0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01');
 const FACILITATOR_URL = process.env.FACILITATOR_URL || 'http://127.0.0.1:3099';
 const PORT = Number(process.env.X402_PORT || 3003);
 const MOCK_INFERENCE = process.env.MOCK_INFERENCE === '1';

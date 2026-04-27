@@ -16,13 +16,17 @@ export const MAINNET = {
   chainScan: "https://chainscan.0g.ai",
   storageScan: "https://storagescan.0g.ai",
   storageIndexer: "https://indexer-storage-turbo.0g.ai",
-  registry: "",
-  escrow: "",
-  w0g: "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c",
+  registry: "0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09",
+  escrow:   "0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5",
+  // SkillMint DemoW0G (EIP-3009 enabled) — distinct from canonical Wrapped0GBase precompile.
+  w0g:      "0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01",
   x402Network: "0g-mainnet",
 };
 
-export const NETWORK = TESTNET;
+// Public-facing network — flip to MAINNET to switch UI to 0G Aristotle.
+// `NEXT_PUBLIC_NETWORK=mainnet` env var lets Vercel preview both without code change.
+export const NETWORK =
+  (process.env.NEXT_PUBLIC_NETWORK || "").toLowerCase() === "mainnet" ? MAINNET : TESTNET;
 
 // ─── Agent-skill sentinels (matches sdk/src/types.ts) ────────────────────
 // Contract requires non-zero computeProvider + non-empty model. Agent-skills

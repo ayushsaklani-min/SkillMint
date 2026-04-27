@@ -13,7 +13,7 @@ EnvironmentFile=/opt/skillmint/oracle/.env
 Environment=FACILITATOR_URL=http://127.0.0.1:3002
 Environment=X402_PORT=3003
 Environment=X402_BASE_URL=http://3.110.116.169:3003
-Environment=NETWORK=0g-testnet
+Environment=NETWORK=0g-mainnet
 ExecStart=/usr/bin/node src/x402-server.js
 Restart=always
 RestartSec=5

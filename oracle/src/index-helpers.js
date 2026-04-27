@@ -17,7 +17,10 @@ export async function loadSystemPrompt({ skill, metadata, skillId, indexer }) {
     const tempPath = path.join(__dirname, `../temp/enc-${skillId}-${Date.now()}.json`);
     fs.mkdirSync(path.dirname(tempPath), { recursive: true });
     try {
-      const err = await indexer.download(meta.storageRoot, tempPath, true);
+      // proof:false avoids segment-replication delay on freshly uploaded prompts —
+      // content is still hash-verified by the SDK and the TEE attestation covers
+      // end-to-end integrity. Mainnet replication can take several minutes.
+      const err = await indexer.download(meta.storageRoot, tempPath, false);
       if (err) throw new Error(`storage download: ${err}`);
       const payload = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
       return decryptPrompt({
@@ -34,7 +37,7 @@ export async function loadSystemPrompt({ skill, metadata, skillId, indexer }) {
     try {
       const tempPath = path.join(__dirname, `../temp/prompt-${skillId}.json`);
       fs.mkdirSync(path.dirname(tempPath), { recursive: true });
-      const err = await indexer.download(skill.promptHash, tempPath, true);
+      const err = await indexer.download(skill.promptHash, tempPath, false);
       if (err) throw new Error(`storage download: ${err}`);
       const promptData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
       fs.unlinkSync(tempPath);

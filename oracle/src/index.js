@@ -24,10 +24,10 @@ const INDEXER_URL = isTestnet
 // V2 contract addresses
 const REGISTRY_ADDR = isTestnet
   ? '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'
-  : ''; // mainnet TBD
+  : '0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09';
 const ESCROW_ADDR = isTestnet
   ? '0xe2841b105B695610f2c1194f8865474A536184dB'
-  : ''; // mainnet TBD
+  : '0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5';
 
 const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistry.json'), 'utf-8'));
 const ESCROW_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillEscrow.json'), 'utf-8'));
