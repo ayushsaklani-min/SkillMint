@@ -165,7 +165,7 @@ function VerifyContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
             <input
-              placeholder="0x receipt root hash..."
+              placeholder="0x… RECEIPT HASH (the one shown after execution — not the payment TX)"
               value={receiptHash}
               onChange={(e) => setReceiptHash(e.target.value)}
               className="w-full h-11 bg-transparent border-0 pl-11 pr-3 text-sm font-mono font-bold placeholder-black/40 focus:outline-none"
@@ -180,6 +180,13 @@ function VerifyContent() {
             {loading ? "VERIFYING..." : "VERIFY →"}
           </button>
         </motion.div>
+
+        <p className="text-xs text-white/70 mb-6">
+          Tip: paste the <span className="bg-[#FFD600] text-black font-bold px-1.5 rounded">RECEIPT HASH</span> shown after a successful execution.
+          Don&apos;t paste the payment TX hash — that goes to ChainScan, not here.
+        </p>
+
+        <RecentExecutions onPick={(h) => { setReceiptHash(h); setTimeout(() => verify(h), 50); }} />
 
         <div className="mb-8" />
 
@@ -414,6 +421,41 @@ function DetailRow({ label, value, mono, highlight }: { label: string; value: st
       }`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// Reads the same localStorage key the execute page writes to so users can
+// click straight from a saved receipt — solves the "I refreshed and lost the
+// hash" pain point the user reported.
+function RecentExecutions({ onPick }: { onPick: (hash: string) => void }) {
+  const [items, setItems] = useState<Array<{ skillName: string; receiptHash: string; txHash: string; ts: number }>>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("skillmint:lastExecutions") || "[]";
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setItems(parsed);
+    } catch {}
+  }, []);
+  if (!items.length) return null;
+  return (
+    <div className="bg-white/10 border-2 border-white/30 rounded-2xl p-4 mb-6 backdrop-blur-sm">
+      <div className="font-mono text-[10px] font-bold tracking-widest text-white/70 mb-3">YOUR RECENT EXECUTIONS — CLICK TO VERIFY</div>
+      <div className="space-y-2">
+        {items.map((e) => (
+          <button
+            key={e.receiptHash}
+            onClick={() => onPick(e.receiptHash)}
+            className="w-full flex items-center justify-between gap-3 bg-white text-black border-2 border-black rounded-xl px-3 py-2 text-left hover:bg-[#D4FF00] transition-colors"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="font-display text-sm truncate">{e.skillName || "Skill execution"}</div>
+              <div className="font-mono text-[10px] text-black/60 truncate">{e.receiptHash}</div>
+            </div>
+            <div className="shrink-0 font-mono text-[10px] font-bold tracking-widest text-black/50">{new Date(e.ts).toLocaleString()}</div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

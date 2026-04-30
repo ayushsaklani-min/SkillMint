@@ -74,6 +74,27 @@ function ExecuteContent() {
   const [exec, setExec] = useState<ExecutionState>(INITIAL_STATE);
   const [walletAddr, setWalletAddr] = useState("");
   const [receiptData, setReceiptData] = useState<Record<string, unknown> | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Persist successful executions so a refresh doesn't lose the receipt hash —
+  // users were copy-pasting it from memory and pasting payment TXs into verify.
+  const STORAGE_KEY = "skillmint:lastExecutions";
+  function saveLastExecution(entry: { skillName: string; receiptHash: string; txHash: string; ts: number }) {
+    if (typeof window === "undefined") return;
+    try {
+      const prev: Array<typeof entry> = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      const next = [entry, ...prev.filter((p) => p.receiptHash !== entry.receiptHash)].slice(0, 5);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  }
+
+  function copyReceipt() {
+    if (!exec.receiptHash) return;
+    navigator.clipboard.writeText(exec.receiptHash).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }).catch(() => {});
+  }
 
   const [bundleState, setBundleState] = useState<"idle" | "buying" | "done">("idle");
   const [bundleErr, setBundleErr] = useState("");
@@ -164,7 +185,18 @@ function ExecuteContent() {
         if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
         const data = await res.json();
         if (data.settled) {
-          setExec((prev) => ({ ...prev, phase: "confirmed", payee: data.payee, receiptHash: data.receiptHash || "" }));
+          setExec((prev) => {
+            const next = { ...prev, phase: "confirmed" as ExecutionPhase, payee: data.payee, receiptHash: data.receiptHash || "" };
+            if (data.receiptHash) {
+              saveLastExecution({
+                skillName: prev.skillName,
+                receiptHash: data.receiptHash,
+                txHash: prev.txHash,
+                ts: Date.now(),
+              });
+            }
+            return next;
+          });
           if (data.receiptHash) {
             try {
               const receiptRes = await fetch(`/api/verify?hash=${encodeURIComponent(data.receiptHash)}`);
@@ -532,6 +564,28 @@ function ExecuteContent() {
                   </div>
                 </div>
               </div>
+
+              {/* SAVE THIS HASH — the one thing users keep losing on refresh */}
+              {exec.receiptHash && (
+                <div className="bg-[#FFD600] text-black border-2 border-black rounded-2xl shadow-brutal p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-black text-[#FFD600] font-mono text-[10px] font-bold tracking-widest px-2 py-1 rounded-full">★ SAVE THIS</span>
+                    <span className="font-display text-sm tracking-wide">RECEIPT HASH — paste this on /verify any time</span>
+                  </div>
+                  <div className="flex items-stretch gap-2 mb-3">
+                    <code className="flex-1 min-w-0 bg-white border-2 border-black rounded-xl px-3 py-2 font-mono text-[11px] sm:text-xs break-all">{exec.receiptHash}</code>
+                    <button
+                      onClick={copyReceipt}
+                      className="shrink-0 bg-black text-[#FFD600] font-display text-xs px-4 border-2 border-black rounded-xl hover:bg-[#0038FF] transition-colors"
+                    >
+                      {copied ? "COPIED ✓" : "COPY"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-black/70">
+                    This is NOT the payment TX. The payment TX (<span className="font-mono">{exec.txHash.slice(0, 8)}…</span>) goes to ChainScan; the receipt hash above goes to <Link href={`/verify?hash=${exec.receiptHash}`} className="font-bold underline">/verify</Link> to see the TEE-attested output.
+                  </p>
+                </div>
+              )}
 
               {/* Verification badges */}
               <div className="bg-white text-black border-2 border-black rounded-2xl shadow-brutal p-6">
