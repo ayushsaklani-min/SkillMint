@@ -62,6 +62,53 @@ export default function SkillPage() {
   const [buyState, setBuyState] = useState<"idle" | "buying" | "done">("idle");
   const [buyErr, setBuyErr] = useState("");
   const [buyResult, setBuyResult] = useState<{ tx: string; receiptRoot: string; sha256: string; size: number } | null>(null);
+  const [walletAddr, setWalletAddr] = useState("");
+  const [adminState, setAdminState] = useState<"idle" | "running" | "done">("idle");
+  const [adminErr, setAdminErr] = useState("");
+
+  // Read connected wallet (read-only — only used to show the owner panel).
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.ethereum) return;
+    const eth = window.ethereum as unknown as {
+      request: (args: { method: string }) => Promise<unknown>;
+      on?: (ev: string, fn: (accs: unknown) => void) => void;
+      removeListener?: (ev: string, fn: (accs: unknown) => void) => void;
+    };
+    eth.request({ method: "eth_accounts" })
+      .then((accs) => { if (Array.isArray(accs) && typeof accs[0] === "string") setWalletAddr(accs[0]); })
+      .catch(() => {});
+    const handler = (accs: unknown) => {
+      if (Array.isArray(accs) && typeof accs[0] === "string") setWalletAddr(accs[0]);
+      else setWalletAddr("");
+    };
+    eth.on?.("accountsChanged", handler);
+    return () => { eth.removeListener?.("accountsChanged", handler); };
+  }, []);
+
+  async function toggleActive() {
+    if (!skill) return;
+    setAdminState("running"); setAdminErr("");
+    try {
+      if (!window.ethereum) throw new Error("MetaMask not found");
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: `0x${NETWORK.chainId.toString(16)}` }],
+      }).catch(() => {});
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+      const signer = await provider.getSigner();
+      const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
+      const tx = skill.active
+        ? await registry.deactivateSkill(skill.id)
+        : await registry.activateSkill(skill.id);
+      await tx.wait();
+      setAdminState("done");
+      await loadSkill();
+    } catch (e) {
+      setAdminErr(parseError(e, skill.active ? "Deactivate failed." : "Activate failed."));
+      setAdminState("idle");
+    }
+  }
 
   async function buyAndDownload() {
     if (!skill) return;
@@ -397,6 +444,41 @@ export default function SkillPage() {
                 <DetailRow label="Royalty" value="5% on secondary sales" />
               </div>
             </motion.div>
+
+            {/* Owner-only controls */}
+            {walletAddr && walletAddr.toLowerCase() === skill.owner.toLowerCase() && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.22 }}
+                className="bg-[#FFD600] text-black border-2 border-black rounded-3xl shadow-brutal p-6"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-display text-base tracking-wide">OWNER CONTROLS</h3>
+                  <span className="font-mono text-[10px] font-bold tracking-widest bg-black text-[#FFD600] px-2 py-1 rounded-full">YOU OWN THIS</span>
+                </div>
+                <p className="text-xs text-black/70 mb-4">
+                  {skill.active
+                    ? "Deactivating hides this skill from buyers and stops new executions. The NFT stays in your wallet — re-activate any time."
+                    : "Re-activating makes this skill purchasable again."}
+                </p>
+                <button
+                  onClick={toggleActive}
+                  disabled={adminState === "running"}
+                  className={`w-full h-12 rounded-full font-display text-sm border-2 border-black shadow-brutal-sm btn-brutal disabled:opacity-60 disabled:cursor-not-allowed ${
+                    skill.active ? "bg-[#FF3333] text-white" : "bg-[#D4FF00] text-black"
+                  }`}
+                >
+                  {adminState === "running"
+                    ? "CONFIRM IN WALLET..."
+                    : skill.active ? "DEACTIVATE SKILL" : "ACTIVATE SKILL"}
+                </button>
+                {adminErr && (
+                  <div className="mt-3 bg-white border-2 border-[#FF3333] rounded-xl p-3 text-xs text-[#FF3333] font-bold break-words">{adminErr}</div>
+                )}
+                {adminState === "done" && !adminErr && (
+                  <div className="mt-3 bg-black text-[#D4FF00] rounded-xl p-3 text-xs font-mono font-bold tracking-widest text-center">✓ ON-CHAIN UPDATED</div>
+                )}
+              </motion.div>
+            )}
 
             {/* Actions */}
             <motion.div
