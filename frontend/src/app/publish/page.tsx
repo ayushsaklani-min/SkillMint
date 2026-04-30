@@ -18,14 +18,18 @@ const stepsForKind = (k: Kind) => [
   { num: 4, title: "REVIEW" },
 ];
 
-// Live TEE-attested mainnet models (0G Aristotle). Cheapest on top so it's the
-// default selection — keeps publish flow gas-cheap unless creators upgrade.
+// Live TEE-attested mainnet models (0G Aristotle). Each pairs with the EXACT
+// broker provider that serves it — picking the wrong provider for a model
+// makes the oracle's broker call fail and the contract auto-refunds. Cheapest
+// model on top so the default publish stays gas-cheap.
 const MODELS = [
-  { value: "qwen/qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B", network: "Mainnet" },
-  { value: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek v3", network: "Mainnet" },
-  { value: "zai-org/GLM-5-FP8", label: "GLM-5 FP8", network: "Mainnet" },
-  { value: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini", network: "Mainnet" },
+  { value: "qwen/qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B",  network: "Mainnet", provider: "0x4415ef5CBb415347bb18493af7cE01f225Fc0868" },
+  { value: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek v3",   network: "Mainnet", provider: "0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0" },
+  { value: "zai-org/GLM-5-FP8",              label: "GLM-5 FP8",     network: "Mainnet", provider: "0xd9966e13a6026Fcca4b13E7ff95c94DE268C471C" },
+  { value: "zai-org/GLM-5.1-FP8",            label: "GLM-5.1 FP8",   network: "Mainnet", provider: "0x7DCFe6AEa70350C2090041524c9B4A9262DCe87D" },
+  { value: "openai/gpt-5.4-mini",            label: "GPT-5.4 Mini",  network: "Mainnet", provider: "0x25F8f01cA76060ea40895472b1b79f76613Ca497" },
 ];
+const DEFAULT_MODEL = MODELS[0];
 
 const COMPAT = ["claude-code", "cursor", "codex"] as const;
 
@@ -42,10 +46,17 @@ export default function PublishPage() {
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [price, setPrice] = useState("0.001");
-  const [model, setModel] = useState("qwen/qwen3-vl-30b-a3b-instruct");
-  // Mainnet qwen3-vl-30b provider (cheapest TEE chat on 0G Aristotle).
-  // Override via the Publish UI if you want a different model/provider.
-  const [computeProvider, setComputeProvider] = useState("0x4415ef5CBb415347bb18493af7cE01f225Fc0868");
+  const [model, setModel] = useState(DEFAULT_MODEL.value);
+  // Each model is bound to the broker provider that actually serves it. If
+  // these get out of sync, the oracle's broker call rejects and the contract
+  // auto-refunds — so the model dropdown writes to BOTH state slots below.
+  const [computeProvider, setComputeProvider] = useState(DEFAULT_MODEL.provider);
+  function pickModel(value: string) {
+    const m = MODELS.find((x) => x.value === value);
+    if (!m) return;
+    setModel(m.value);
+    setComputeProvider(m.provider);
+  }
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ skillId: string; txHash: string; nftOwner: string; kind: Kind } | null>(null);
   const [error, setError] = useState("");
@@ -384,14 +395,14 @@ export default function PublishPage() {
                     </Field>
                     <Field label="MODEL">
                       <select
-                        value={model} onChange={(e) => setModel(e.target.value)}
+                        value={model} onChange={(e) => pickModel(e.target.value)}
                         className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-medium focus:outline-none focus:shadow-brutal-sm transition-shadow"
                       >
                         {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label} ({m.network})</option>)}
                       </select>
                     </Field>
                   </div>
-                  <Field label="COMPUTE PROVIDER ADDRESS">
+                  <Field label="COMPUTE PROVIDER ADDRESS (auto-set from model — only override if you know the broker)">
                     <input
                       value={computeProvider} onChange={(e) => setComputeProvider(e.target.value)}
                       className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-xs font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
