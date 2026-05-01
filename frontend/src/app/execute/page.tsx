@@ -185,24 +185,27 @@ function ExecuteContent() {
         if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
         const data = await res.json();
         if (data.settled) {
-          setExec((prev) => {
-            const next = { ...prev, phase: "confirmed" as ExecutionPhase, payee: data.payee, receiptHash: data.receiptHash || "" };
-            if (data.receiptHash) {
-              saveLastExecution({
-                skillName: prev.skillName,
-                receiptHash: data.receiptHash,
-                txHash: prev.txHash,
-                ts: Date.now(),
-              });
-            }
-            return next;
-          });
-          if (data.receiptHash) {
-            try {
-              const receiptRes = await fetch(`/api/verify?hash=${encodeURIComponent(data.receiptHash)}`);
-              if (receiptRes.ok) setReceiptData(await receiptRes.json());
-            } catch {}
+          // Race: settled=true can flip slightly before receiptHash is indexed
+          // off the ExecutionConfirmed event. Don't lock the UI into a stuck
+          // "syncing" state — keep polling (briefly) until the hash appears.
+          if (!data.receiptHash) {
+            setExec((prev) => ({ ...prev, phase: "confirmed" as ExecutionPhase, payee: data.payee || prev.payee }));
+            setTimeout(poll, 1500);
+            return;
           }
+          setExec((prev) => {
+            saveLastExecution({
+              skillName: prev.skillName,
+              receiptHash: data.receiptHash,
+              txHash: prev.txHash,
+              ts: Date.now(),
+            });
+            return { ...prev, phase: "confirmed" as ExecutionPhase, payee: data.payee, receiptHash: data.receiptHash };
+          });
+          try {
+            const receiptRes = await fetch(`/api/verify?hash=${encodeURIComponent(data.receiptHash)}`);
+            if (receiptRes.ok) setReceiptData(await receiptRes.json());
+          } catch {}
           return;
         }
         if (data.refunded) { setExec((prev) => ({ ...prev, phase: "refunded" })); return; }
