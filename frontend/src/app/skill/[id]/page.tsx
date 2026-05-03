@@ -276,7 +276,7 @@ export default function SkillPage() {
           ) : (
             <Link href={`/execute?skill=${skillId}`}>
               <button className="bg-[#D4FF00] text-black font-display text-base sm:text-lg px-6 sm:px-7 py-3 border-2 border-black rounded-full shadow-brutal btn-brutal">
-                EXECUTE — {skill.price} A0GI →
+                EXECUTE — {skill.price} 0G →
               </button>
             </Link>
           )}
@@ -305,7 +305,7 @@ export default function SkillPage() {
               ) : (
                 <div className="space-y-3">
                   <DetailRow label="Model" value={skill.model} />
-                  <DetailRow label="Price" value={`${skill.price} A0GI`} highlight />
+                  <DetailRow label="Price" value={`${skill.price} 0G`} highlight />
                   <DetailRow label="Compute Provider" value={skill.computeProvider} mono />
                   <DetailRow label="Prompt Hash" value={skill.promptHash} mono />
                   <DetailRow label="Created" value={new Date(skill.createdAt * 1000).toLocaleDateString()} />
@@ -439,8 +439,8 @@ export default function SkillPage() {
               <div className="space-y-3">
                 <DetailRow label="Owner" value={skill.owner} mono />
                 <DetailRow label="Creator" value={skill.developer} mono />
-                <DetailRow label="Revenue" value={`${skill.totalRevenue} A0GI`} />
-                <DetailRow label="Pending" value={`${skill.pendingRevenue} A0GI`} highlight />
+                <DetailRow label="Revenue" value={`${skill.totalRevenue} 0G`} />
+                <DetailRow label="Pending" value={`${skill.pendingRevenue} 0G`} highlight />
                 <DetailRow label="Royalty" value="5% on secondary sales" />
               </div>
             </motion.div>

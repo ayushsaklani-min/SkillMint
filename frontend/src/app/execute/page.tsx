@@ -246,7 +246,7 @@ function ExecuteContent() {
             chainName: NETWORK.chainId === 16661 ? "0G Aristotle Mainnet" : "0G Testnet",
             rpcUrls: [NETWORK.rpcUrl],
             blockExplorerUrls: [NETWORK.chainScan],
-            nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
+            nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 },
           }],
         });
       });
@@ -338,7 +338,7 @@ function ExecuteContent() {
                 >
                   {skills.map((s) => (
                     <option key={s.id} value={s.id} disabled={!s.active}>
-                      #{s.id} {s.kind === "agent-skill" ? "📦" : "⚡"} {s.name} — {s.price} {s.kind === "agent-skill" ? "W0G" : "A0GI"}{!s.active ? " (Inactive)" : ""}
+                      #{s.id} {s.kind === "agent-skill" ? "📦" : "⚡"} {s.name} — {s.price} {s.kind === "agent-skill" ? "W0G" : "0G"}{!s.active ? " (Inactive)" : ""}
                     </option>
                   ))}
                 </select>
@@ -439,7 +439,7 @@ function ExecuteContent() {
                     : exec.phase === "waiting"
                     ? "WAITING FOR ORACLE..."
                     : currentSkill
-                    ? `EXECUTE — ${currentSkill.price} A0GI →`
+                    ? `EXECUTE — ${currentSkill.price} 0G →`
                     : "SELECT A SKILL"}
                 </button>
               </>
@@ -506,7 +506,7 @@ function ExecuteContent() {
             >
               <h3 className="font-display text-base tracking-wide mb-5">EXECUTION PROGRESS</h3>
               <div className="space-y-4">
-                <Step num={1} title="PAYMENT SENT" desc={`You paid ${exec.amount || currentSkill?.price || "?"} A0GI to escrow`} done={exec.phase === "sending" || exec.phase === "waiting"} active={exec.phase === "connecting" || exec.phase === "sending"} />
+                <Step num={1} title="PAYMENT SENT" desc={`You paid ${exec.amount || currentSkill?.price || "?"} 0G to escrow`} done={exec.phase === "sending" || exec.phase === "waiting"} active={exec.phase === "connecting" || exec.phase === "sending"} />
                 <Step num={2} title="ORACLE PROCESSING" desc="Oracle picks up request, runs skill inside TEE hardware" done={false} active={exec.phase === "waiting"} />
                 <Step num={3} title="TEE VERIFICATION" desc="Output verified by Trusted Execution Environment" done={false} active={false} />
                 <Step num={4} title="RECEIPT STORED" desc="Verified receipt uploaded to 0G decentralized storage" done={false} active={false} />
@@ -599,7 +599,7 @@ function ExecuteContent() {
                   <VerifyBadge label="RECEIPT STORED" verified={!!exec.receiptHash} />
                 </div>
                 <div className="space-y-3 pt-5 border-t-2 border-black">
-                  <DetailRow label="Paid" value={`${exec.amount} A0GI`} highlight />
+                  <DetailRow label="Paid" value={`${exec.amount} 0G`} highlight />
                   <DetailRow label="Revenue To" value={exec.payee} mono />
                   <DetailRow label="Execution ID" value={exec.executionId} mono />
                   <DetailRow label="Payment TX" value={exec.txHash} mono link={`${NETWORK.chainScan}/tx/${exec.txHash}`} />
@@ -648,7 +648,7 @@ function ExecuteContent() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg">EXECUTION REFUNDED</h3>
-                  <p className="text-sm text-black/70">Your A0GI has been returned.</p>
+                  <p className="text-sm text-black/70">Your 0G has been returned.</p>
                 </div>
               </div>
               <div className="space-y-2 mt-4">

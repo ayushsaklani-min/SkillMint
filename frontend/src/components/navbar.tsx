@@ -96,7 +96,7 @@ export default function Navbar() {
                 chainName: NETWORK.chainId === 16661 ? "0G Aristotle Mainnet" : "0G Galileo Testnet",
                 rpcUrls: [NETWORK.rpcUrl],
                 blockExplorerUrls: [NETWORK.chainScan],
-                nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
+                nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 },
               },
             ],
           });

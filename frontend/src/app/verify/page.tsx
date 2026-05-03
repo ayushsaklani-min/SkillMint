@@ -283,7 +283,7 @@ function VerifyContent() {
                   <p className="text-sm text-black/80 mb-4">{skill.description}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <DetailRow label="Model" value={skill.model} />
-                    <DetailRow label="Price" value={`${skill.price} A0GI`} />
+                    <DetailRow label="Price" value={`${skill.price} 0G`} />
                     <DetailRow label="Reputation" value={`${skill.reputation.successful}/${skill.reputation.total} (${skill.reputation.rate}%)`} />
                     <DetailRow label="NFT Owner" value={`${skill.owner.slice(0, 6)}...${skill.owner.slice(-4)}`} mono />
                   </div>
@@ -311,7 +311,7 @@ function VerifyContent() {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <DetailRow label="Amount Paid" value={`${receipt.paidA0GI} A0GI`} highlight />
+                  <DetailRow label="Amount Paid" value={`${receipt.paidA0GI} 0G`} highlight />
                   {receipt.nftOwner && <DetailRow label="Revenue To" value={receipt.nftOwner} mono />}
                   <DetailRow label="Execution ID" value={receipt.executionId} mono />
                   <DetailRow label="Input Hash" value={receipt.inputHash} mono />

@@ -163,7 +163,7 @@ function FloatingSkillCard({
       </div>
       <div className="flex items-center justify-between">
         <span className="bg-black text-[#D4FF00] font-mono text-xs font-bold px-2 py-1 rounded-full border border-black">
-          {skill.price} A0GI
+          {skill.price} 0G
         </span>
         <span className="text-white/80 text-[10px] font-mono">
           {skill.owner.slice(0, 4)}...{skill.owner.slice(-3)}
@@ -328,14 +328,24 @@ export default function HomePage() {
       let totalRevWei = BigInt(0);
       try {
         const filter = escrow.filters.ExecutionConfirmed();
-        const events = await escrow.queryFilter(filter, -50000);
-        for (const ev of events) {
-          const parsed = escrow.interface.parseLog({ topics: ev.topics as string[], data: ev.data });
-          if (parsed?.args) {
-            totalRevWei += BigInt(parsed.args.payeeAmount || 0);
+        const latest = await provider.getBlockNumber();
+        const CHUNK = 9000;
+        const MAX_LOOKBACK = 500000;
+        const start = Math.max(0, latest - MAX_LOOKBACK);
+        for (let from = start; from <= latest; from += CHUNK) {
+          const to = Math.min(from + CHUNK - 1, latest);
+          const events = await escrow.queryFilter(filter, from, to);
+          for (const ev of events) {
+            const parsed = escrow.interface.parseLog({ topics: ev.topics as string[], data: ev.data });
+            if (parsed?.args) {
+              totalRevWei += BigInt(parsed.args.payeeAmount || 0);
+              totalRevWei += BigInt(parsed.args.treasuryAmount || 0);
+            }
           }
         }
-      } catch {}
+      } catch (e) {
+        console.error("revenue scan failed:", e);
+      }
 
       setSkills(loaded);
       setStats({
@@ -461,7 +471,7 @@ export default function HomePage() {
               <div className="grid grid-cols-3 divide-x-2 divide-black">
                 <StatBox label="SKILLS MINTED" value={loading ? "…" : stats.skillCount.toString()} />
                 <StatBox label="EXECUTIONS" value={loading ? "…" : stats.totalExecutions.toString()} accent />
-                <StatBox label="A0GI SETTLED" value={loading ? "…" : stats.totalRevenue} />
+                <StatBox label="0G SETTLED" value={loading ? "…" : stats.totalRevenue} />
               </div>
             </div>
           </FadeIn>
@@ -585,7 +595,7 @@ export default function HomePage() {
                         0.001
                       </div>
                       <div className="bg-white text-black font-display text-sm px-3 py-2 rounded-full border-2 border-black">
-                        A0GI
+                        0G
                       </div>
                       <div className="bg-black text-[#D4FF00] w-9 h-9 rounded-full border-2 border-black flex items-center justify-center">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M5 19 L 19 5" /><path d="M8 5 L 19 5 L 19 16" /></svg>
@@ -595,7 +605,7 @@ export default function HomePage() {
                 },
                 {
                   step: "03",
-                  title: "EARN\nA0GI",
+                  title: "EARN\n0G",
                   desc: "90% to NFT owner on verified receipt. 10% protocol fee. Everything settles in one block.",
                   tone: "lime" as const,
                   illustration: (
@@ -745,7 +755,7 @@ export default function HomePage() {
                       {/* Stats row */}
                       <div className="flex items-center justify-between gap-2 pt-4 border-t-2 border-black">
                         <span className="bg-[#0038FF] text-white font-display text-xs px-3 py-1.5 rounded-full border-2 border-black">
-                          {s.price} {s.kind === "agent-skill" ? "W0G" : "A0GI"}
+                          {s.price} {s.kind === "agent-skill" ? "W0G" : "0G"}
                         </span>
                         <div className="flex items-center gap-2 text-xs font-mono font-bold">
                           {s.total > 0 && (

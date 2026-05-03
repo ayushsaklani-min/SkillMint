@@ -100,7 +100,7 @@ export default function PublishPage() {
           chainName: NETWORK.chainId === 16661 ? "0G Aristotle Mainnet" : "0G Testnet",
           rpcUrls: [NETWORK.rpcUrl],
           blockExplorerUrls: [NETWORK.chainScan],
-          nativeCurrency: { name: "A0GI", symbol: "A0GI", decimals: 18 },
+          nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 },
         }],
       });
     });
@@ -387,7 +387,7 @@ export default function PublishPage() {
               {step === 3 && kind === "prompt" && (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <Field label="PRICE (A0GI)">
+                    <Field label="PRICE (0G)">
                       <input
                         value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="0.001" min="0.001"
                         className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
@@ -411,9 +411,9 @@ export default function PublishPage() {
                   <div className="bg-[#0038FF] text-white border-2 border-black rounded-2xl p-5">
                     <div className="font-display text-xs tracking-widest mb-3">REVENUE SPLIT</div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span>Price per execution</span><span className="font-mono font-bold">{price} A0GI</span></div>
-                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(price) * 0.9).toFixed(4)} A0GI</span></div>
-                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(price) * 0.1).toFixed(4)} A0GI</span></div>
+                      <div className="flex justify-between"><span>Price per execution</span><span className="font-mono font-bold">{price} 0G</span></div>
+                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(price) * 0.9).toFixed(4)} 0G</span></div>
+                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(price) * 0.1).toFixed(4)} 0G</span></div>
                     </div>
                   </div>
                 </div>
@@ -448,7 +448,7 @@ export default function PublishPage() {
                     {kind === "prompt" ? (
                       <>
                         <ReviewRow label="Model" value={MODELS.find(m => m.value === model)?.label || model} />
-                        <ReviewRow label="Price" value={`${price} A0GI`} highlight />
+                        <ReviewRow label="Price" value={`${price} 0G`} highlight />
                         <ReviewRow label="Compute Provider" value={computeProvider} mono />
                         <ReviewRow label="System Prompt" value={systemPrompt.slice(0, 120) + (systemPrompt.length > 120 ? "..." : "")} />
                       </>
