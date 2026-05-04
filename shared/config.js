@@ -26,9 +26,9 @@ export const MAINNET = {
   storageIndexer: 'https://indexer-storage-turbo.0g.ai',
   storageFlowContract: '0x62D4144dB0F0a6fBBaeb6296c785C71B3D57C526',
   contracts: {
-    // SkillRegistryV3 + SkillEscrowV3 — set after mainnet deploy (Task 15).
-    registry: '<MAINNET_REGISTRY_V3>',
-    escrow:   '<MAINNET_ESCROW_V3>',
+    // SkillRegistryV3 + SkillEscrowV3 — deployed 2026-05-04 on Aristotle mainnet.
+    registry: '0xdF28e06899955092DF81f0DBea03496D1Ac8904E',
+    escrow:   '0xA0e5A7d722399f59A0Ee4B8DF740107FBC63f7ae',
     w0g:      '0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01',
     usdc:     '0x1f3aa82227281ca364bfb3d253b0f1af1da6473e',
   },
