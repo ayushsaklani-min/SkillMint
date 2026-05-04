@@ -11,8 +11,8 @@ const V2_REGISTRY_ABI = [
 ];
 
 async function main() {
-  if (network.name !== "0g-mainnet") {
-    console.log(`Note: running on ${network.name}. Use 0g-mainnet for production republish.`);
+  if (network.name !== "mainnet") {
+    console.log(`Note: running on ${network.name}. Use mainnet for production republish.`);
   }
   const v3Addr = process.env.REGISTRY_V3_ADDRESS;
   if (!v3Addr) throw new Error("Set REGISTRY_V3_ADDRESS env");

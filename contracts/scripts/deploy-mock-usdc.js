@@ -2,7 +2,7 @@
 const { ethers, network } = require("hardhat");
 
 async function main() {
-  if (network.name !== "0g-testnet") {
+  if (network.name !== "testnet") {
     throw new Error(`Refusing to deploy MockUSDC on ${network.name} — testnet only.`);
   }
   const [signer] = await ethers.getSigners();

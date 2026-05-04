@@ -2,11 +2,11 @@
 const { ethers, network } = require("hardhat");
 
 const TOKENS = {
-  "0g-testnet": [
+  testnet: [
     "0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D",
     process.env.MOCK_USDC_ADDRESS,
   ],
-  "0g-mainnet": [
+  mainnet: [
     "0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01",
     "0x1f3aa82227281ca364bfb3d253b0f1af1da6473e",
   ],
