@@ -10,27 +10,23 @@ import { decryptPrompt } from './crypto.js';
 import { waitForInput } from './store.js';
 import { hashInput, hashOutput } from '../../shared/hash.js';
 import { serializeReceipt } from '../../shared/receipt.js';
+import { TESTNET, MAINNET } from '../../shared/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
 const isTestnet = (process.env.NETWORK || 'testnet') === 'testnet';
-const RPC_URL = isTestnet ? 'https://evmrpc-testnet.0g.ai' : 'https://evmrpc.0g.ai';
-const INDEXER_URL = isTestnet
-  ? 'https://indexer-storage-testnet-turbo.0g.ai'
-  : 'https://indexer-storage-turbo.0g.ai';
+const NET = isTestnet ? TESTNET : MAINNET;
+const RPC_URL     = NET.rpcUrl;
+const INDEXER_URL = NET.storageIndexer;
 
-// V2 contract addresses
-const REGISTRY_ADDR = isTestnet
-  ? '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'
-  : '0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09';
-const ESCROW_ADDR = isTestnet
-  ? '0xe2841b105B695610f2c1194f8865474A536184dB'
-  : '0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5';
+// V3 contract addresses (from shared/config.js — placeholders until Tasks 14/15 deploy)
+const REGISTRY_ADDR = NET.contracts.registry;
+const ESCROW_ADDR   = NET.contracts.escrow;
 
-const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistry.json'), 'utf-8'));
-const ESCROW_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillEscrow.json'), 'utf-8'));
+const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistryV3.json'), 'utf-8'));
+const ESCROW_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillEscrowV3.json'), 'utf-8'));
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
@@ -57,9 +53,9 @@ async function loadSystemPrompt(args) {
 
 // ─── Execute a Skill ───────────────────────────────────────────────────────────
 
-async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) {
+async function executeSkill(executionId, skillId, agentAddr, inputHash, amount, paymentToken) {
   console.log(`\n[oracle] Processing execution ${executionId}`);
-  console.log(`  skillId=${skillId} agent=${agentAddr} amount=${ethers.formatEther(amount)} 0G`);
+  console.log(`  skillId=${skillId} agent=${agentAddr} amount=${amount} paymentToken=${paymentToken}`);
 
   try {
     // 1. Fetch skill from V2 registry (returns struct, access by name)
@@ -132,6 +128,11 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
     }
 
     // 8. Build receipt + upload to 0G Storage
+    const isNative = !paymentToken || paymentToken === ethers.ZeroAddress || paymentToken.toLowerCase() === ethers.ZeroAddress;
+    const w0gAddr  = NET.tokens.w0g.address.toLowerCase();
+    const isW0G    = !isNative && paymentToken.toLowerCase() === w0gAddr;
+    const usdcDecimals = NET.tokens.usdc.decimals;
+
     const receipt = {
       executionId,
       skillId: Number(skillId),
@@ -143,7 +144,12 @@ async function executeSkill(executionId, skillId, agentAddr, inputHash, amount) 
       providerAddress: computeProvider,
       nftOwner,
       timestamp: Date.now(),
-      paidA0GI: ethers.formatEther(amount),
+      paymentToken: paymentToken || ethers.ZeroAddress,
+      ...(isNative
+          ? { paidA0GI: ethers.formatEther(amount) }
+          : isW0G
+            ? { paidW0G:  ethers.formatEther(amount) }
+            : { paidUSDC: ethers.formatUnits(amount, usdcDecimals) }),
       output,
     };
 
@@ -189,12 +195,12 @@ async function processPastEvents() {
   const events = await escrow.queryFilter(filter, -5000); // last 5000 blocks
   let pending = 0;
   for (const event of events) {
-    const [executionId, skillId, agent, inputHash, amount] = event.args;
+    const [executionId, skillId, agent, inputHash, amount, paymentToken] = event.args;
     const exec = await escrow.getExecution(executionId);
     if (!exec.settled && !exec.refunded) {
       pending++;
-      console.log(`[oracle] Found pending: ${executionId}`);
-      await executeSkill(executionId, skillId, agent, inputHash, amount);
+      console.log(`[oracle] Found pending: ${executionId} (paymentToken=${paymentToken})`);
+      await executeSkill(executionId, skillId, agent, inputHash, amount, paymentToken);
     }
   }
   if (pending === 0) console.log('[oracle] No pending executions found.');
@@ -208,11 +214,11 @@ let executionQueue = Promise.resolve();
 async function startListener() {
   console.log(`[oracle] Listening for ExecutionRequested on ${ESCROW_ADDR}...`);
 
-  escrow.on('ExecutionRequested', (executionId, skillId, agent, inputHash, amount) => {
-    console.log(`\n[oracle] Event: ExecutionRequested ${executionId}`);
+  escrow.on('ExecutionRequested', (executionId, skillId, agent, inputHash, amount, paymentToken) => {
+    console.log(`\n[oracle] Event: ExecutionRequested ${executionId} (paymentToken=${paymentToken})`);
     executionQueue = executionQueue
       .catch(() => {})
-      .then(() => executeSkill(executionId, skillId, agent, inputHash, amount));
+      .then(() => executeSkill(executionId, skillId, agent, inputHash, amount, paymentToken));
   });
 
   process.on('SIGINT', () => {
@@ -224,7 +230,7 @@ async function startListener() {
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('=== SkillMint Oracle Backend (V2) ===');
+  console.log('=== SkillMint Oracle Backend (V3) ===');
   console.log(`Network: ${isTestnet ? 'testnet' : 'mainnet'}`);
   console.log(`Wallet: ${wallet.address}`);
   console.log(`Registry: ${REGISTRY_ADDR}`);
