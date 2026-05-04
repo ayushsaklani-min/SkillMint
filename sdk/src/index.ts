@@ -1,9 +1,10 @@
 export { SkillMintClient } from "./client.js";
 export { TESTNET, MAINNET } from "./constants.js";
-export { REGISTRY_ABI, ESCROW_ABI, W0G_ABI } from "./abis.js";
-export { AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL } from "./types.js";
+export { REGISTRY_ABI, ESCROW_ABI, W0G_ABI, USDC_ABI } from "./abis.js";
+export { AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL, PaymentToken } from "./types.js";
 export type {
   NetworkConfig,
+  TokenInfo,
   Skill,
   SkillMetadata,
   SkillMintOptions,

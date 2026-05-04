@@ -1,5 +1,24 @@
 // ─── Network Configuration ──────────────────────────────────────────────────
 
+// ─── Payment token selection ────────────────────────────────────────────────
+
+/** Selected payment asset for an execution. */
+export enum PaymentToken {
+  Native = "native",  // native 0G via msg.value
+  W0G    = "w0g",     // ERC-20 W0G via approve+transferFrom or x402 EIP-3009
+  USDC   = "usdc",    // ERC-20 USDC.E via approve+transferFrom or x402 EIP-3009
+}
+
+/** Per-token network metadata. */
+export interface TokenInfo {
+  address: string;
+  decimals: number;
+  /** EIP-712 domain `name` for EIP-3009 signing. */
+  name: string;
+  /** EIP-712 domain `version`. */
+  version: string;
+}
+
 export interface NetworkConfig {
   chainId: number;
   rpcUrl: string;
@@ -8,17 +27,15 @@ export interface NetworkConfig {
   storageIndexer: string;
   registry: string;
   escrow: string;
-  /** Canonical/deployed W0G (Wrapped 0G) ERC-20 used for x402 payments. */
+  /** Canonical/deployed W0G (Wrapped 0G) ERC-20. */
   w0g: string;
+  /** XSwap Bridged USDC (USDC.E) on 0G. Mock on testnet. */
+  usdc: string;
+  /** Per-token EIP-712 metadata for x402 signing. */
+  tokens: { w0g: TokenInfo; usdc: TokenInfo };
   /** x402 network name used in paymentRequirements (e.g. "0g-testnet"). */
   x402Network: string;
-  /**
-   * HTTPS URL of the SkillMint oracle HTTP API (encrypt-prompt,
-   * input-handoff). Default points at a Vercel-proxied backend so
-   * consumers don't need to know the EC2 host.
-   */
   oracleUrl: string;
-  /** HTTPS URL of the SkillMint x402-payable skill endpoint root. */
   x402Url: string;
 }
 
@@ -31,10 +48,14 @@ export interface Skill {
   promptHash: string;
   computeProvider: string;
   model: string;
-  /** Price in A0GI (human-readable, e.g. "0.001") */
+  /** Price in 0G (human-readable, e.g. "0.001"). */
   price: string;
-  /** Price in wei */
+  /** Price in 0G wei. */
   priceWei: bigint;
+  /** Price in USDC (human-readable, e.g. "0.01"). 0/empty = USDC disabled for this skill. */
+  priceUSDC: string;
+  /** Price in USDC 6-decimal units. */
+  priceUSDCRaw: bigint;
   metadata: SkillMetadata;
   executionCount: number;
   successfulExecutions: number;
@@ -77,6 +98,8 @@ export interface Execution {
   createdAt: Date;
   settled: boolean;
   refunded: boolean;
+  /** Asset that funded this execution. address(0) = native 0G. */
+  paymentToken: string;
 }
 
 export interface ExecutionResult {
@@ -212,6 +235,8 @@ export interface X402ExecuteResult {
   settlement: { transaction: string; network: string; payer: string; blockNumber?: number };
   payer: string;
   paidW0G: string;
+  /** USDC.E amount paid; "0" if x402 used W0G. */
+  paidUSDC: string;
 }
 
 /** Full receipt JSON stored on 0G Storage after a successful skill run. */
@@ -226,14 +251,18 @@ export interface SkillReceipt {
   providerAddress: string;
   model?: string;
   nftOwner: string;
-  /** Native-A0GI flow fields */
   executionId?: string;
+  /** Native 0G flow */
   paidA0GI?: string;
-  /** x402 flow fields */
-  payer?: string;
+  /** x402 W0G flow */
   paidW0G?: string;
+  /** USDC.E flow (either dashboard or x402) */
+  paidUSDC?: string;
+  payer?: string;
   network?: string;
   timestamp: number;
+  /** Asset paid in. address(0) when missing or native. */
+  paymentToken?: string;
 }
 
 /** Result of re-verifying a prompt-skill receipt end-to-end. */
