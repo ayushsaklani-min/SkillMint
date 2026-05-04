@@ -6,15 +6,15 @@ export const TESTNET = {
   storageIndexer: 'https://indexer-storage-testnet-turbo.0g.ai',
   storageFlowContract: '0x22E03a6A89B950F1c82ec5e74F8eCa321a105296',
   contracts: {
-    // SkillRegistryV3 + SkillEscrowV3 — set after testnet deploy (Task 14).
-    registry: '<TESTNET_REGISTRY_V3>',
-    escrow:   '<TESTNET_ESCROW_V3>',
+    // SkillRegistryV3 + SkillEscrowV3 — deployed 2026-05-04 on Galileo testnet.
+    registry: '0xe052332AA56c179FF9A8B2bCFCCb5679d2BCe9d3',
+    escrow:   '0x4ca3Fe8a467C734c31a34a345F6819e5767cAD9C',
     w0g:      '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D',
-    usdc:     '<TESTNET_MOCK_USDC>',
+    usdc:     '0x1605FF6E8aB0Bd7F846cf99268B669764F981C06',
   },
   tokens: {
     w0g:  { address: '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D', decimals: 18, name: 'Wrapped 0G', version: '1' },
-    usdc: { address: '<TESTNET_MOCK_USDC>',                         decimals: 6,  name: 'Mock USDC',  version: '1' },
+    usdc: { address: '0x1605FF6E8aB0Bd7F846cf99268B669764F981C06', decimals: 6,  name: 'Mock USDC',  version: '1' },
   },
 };
 
