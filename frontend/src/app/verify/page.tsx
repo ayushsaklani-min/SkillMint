@@ -23,6 +23,7 @@ interface ReceiptData {
   nftOwner?: string;
   timestamp: number;
   paidA0GI: string;
+  paymentToken?: string;
   output: string;
 }
 
@@ -86,6 +87,10 @@ function VerifyContent() {
       });
       const exec = await escrow.getExecution(data.executionId);
       setOnChainSettled(exec.settled);
+      // Annotate receipt with on-chain paymentToken if not already present
+      if (!data.paymentToken && exec.paymentToken) {
+        data.paymentToken = exec.paymentToken;
+      }
 
       // Real verification — not just display.
       // 1. On-chain receiptHash IS the 0G Storage root hash (see SkillEscrow.sol:133 —
@@ -311,7 +316,22 @@ function VerifyContent() {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <DetailRow label="Amount Paid" value={`${receipt.paidA0GI} 0G`} highlight />
+                  {(() => {
+                    const pt = receipt.paymentToken;
+                    const tokenLabel =
+                      !pt || pt === ethers.ZeroAddress ? "0G"
+                      : pt.toLowerCase() === NETWORK.w0g.toLowerCase() ? "W0G"
+                      : pt.toLowerCase() === NETWORK.usdc.toLowerCase() ? "USDC.E"
+                      : "?";
+                    const decimals = tokenLabel === "USDC.E" ? 6 : 18;
+                    let display: string;
+                    try {
+                      display = `${ethers.formatUnits(receipt.paidA0GI, decimals)} ${tokenLabel}`;
+                    } catch {
+                      display = `${receipt.paidA0GI} ${tokenLabel}`;
+                    }
+                    return <DetailRow label="Amount Paid" value={display} highlight />;
+                  })()}
                   {receipt.nftOwner && <DetailRow label="Revenue To" value={receipt.nftOwner} mono />}
                   <DetailRow label="Execution ID" value={receipt.executionId} mono />
                   <DetailRow label="Input Hash" value={receipt.inputHash} mono />

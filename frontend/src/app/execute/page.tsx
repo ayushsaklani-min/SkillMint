@@ -5,12 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { NETWORK, REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
+import { NETWORK, REGISTRY_ABI, ESCROW_ABI, W0G_ABI, USDC_ABI } from "@/lib/contracts";
 import { hashInput } from "@/lib/hash";
 import { downloadAgentSkillBrowser, downloadBytes } from "@/lib/x402";
 import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+
+const PaymentToken = { Native: "native", W0G: "w0g", USDC: "usdc" } as const;
+type PaymentToken = typeof PaymentToken[keyof typeof PaymentToken];
 
 type SkillKind = "prompt" | "agent-skill";
 
@@ -22,6 +25,7 @@ interface SkillOption {
   model: string;
   price: string;
   priceWei: bigint;
+  priceUSDC: bigint;
   active: boolean;
   owner: string;
   reputation: number;
@@ -75,6 +79,7 @@ function ExecuteContent() {
   const [walletAddr, setWalletAddr] = useState("");
   const [receiptData, setReceiptData] = useState<Record<string, unknown> | null>(null);
   const [copied, setCopied] = useState(false);
+  const [paymentToken, setPaymentToken] = useState<PaymentToken>(PaymentToken.Native);
 
   // Persist successful executions so a refresh doesn't lose the receipt hash —
   // users were copy-pasting it from memory and pasting payment TXs into verify.
@@ -151,6 +156,7 @@ function ExecuteContent() {
           model: skill.model,
           price: ethers.formatEther(skill.priceA0GI),
           priceWei: skill.priceA0GI,
+          priceUSDC: skill.priceUSDC ?? BigInt(0),
           active: skill.active,
           owner,
           reputation: Number(rate),
@@ -255,20 +261,32 @@ function ExecuteContent() {
       const signer = await browserProvider.getSigner();
       const addr = await signer.getAddress();
       setWalletAddr(addr);
-      // Pre-flight balance check. 0G's RPC surfaces "not enough native to cover
-      // the value send" as a generic revert (no INSUFFICIENT_FUNDS code), so we
-      // catch it before the wallet pops up to keep the UX honest.
-      const balance = await browserProvider.getBalance(addr);
-      const gasBuffer = ethers.parseEther("0.0005"); // tiny native cushion for gas
-      if (balance < skill.priceWei + gasBuffer) {
-        const have = Number(ethers.formatEther(balance)).toFixed(4);
-        const need = Number(ethers.formatEther(skill.priceWei + gasBuffer)).toFixed(4);
-        throw new Error(`Not enough 0G — you have ${have}, need ~${need} (price + gas). Top up your wallet and retry.`);
-      }
       setExec((prev) => ({ ...prev, phase: "sending" }));
       const escrow = new ethers.Contract(NETWORK.escrow, ESCROW_ABI, signer);
       const inputHash = hashInput(userInput);
-      const tx = await escrow.requestExecution(selectedSkill, inputHash, { value: skill.priceWei });
+      let tx;
+      if (paymentToken === PaymentToken.Native) {
+        // Pre-flight balance check for native 0G
+        const balance = await browserProvider.getBalance(addr);
+        const gasBuffer = ethers.parseEther("0.0005");
+        if (balance < skill.priceWei + gasBuffer) {
+          const have = Number(ethers.formatEther(balance)).toFixed(4);
+          const need = Number(ethers.formatEther(skill.priceWei + gasBuffer)).toFixed(4);
+          throw new Error(`Not enough 0G — you have ${have}, need ~${need} (price + gas). Top up your wallet and retry.`);
+        }
+        tx = await escrow.requestExecution(selectedSkill, inputHash, { value: skill.priceWei });
+      } else {
+        const tokenAddr = paymentToken === PaymentToken.USDC ? NETWORK.usdc : NETWORK.w0g;
+        const abi = paymentToken === PaymentToken.USDC ? USDC_ABI : W0G_ABI;
+        const amount = paymentToken === PaymentToken.USDC ? skill.priceUSDC : skill.priceWei;
+        const tokenContract = new ethers.Contract(tokenAddr, abi, signer);
+        const allowance: bigint = await tokenContract.allowance(addr, NETWORK.escrow);
+        if (allowance < amount) {
+          const approveTx = await tokenContract.approve(NETWORK.escrow, amount);
+          await approveTx.wait();
+        }
+        tx = await escrow.requestExecutionWithToken(selectedSkill, inputHash, tokenAddr, amount);
+      }
       const receipt = await tx.wait();
       let executionId = "";
       for (const log of receipt.logs) {
@@ -427,6 +445,56 @@ function ExecuteContent() {
                   />
                 </div>
 
+                <div>
+                  <label className="font-display text-sm tracking-wide mb-2 block">
+                    3 — PAYMENT TOKEN
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentToken(PaymentToken.Native)}
+                      disabled={isRunning}
+                      className={`py-2.5 px-3 font-display text-xs tracking-widest border-2 border-black rounded-xl btn-brutal disabled:opacity-50 ${
+                        paymentToken === PaymentToken.Native ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black"
+                      }`}
+                    >
+                      <div>0G</div>
+                      <div className="font-mono text-[10px] text-current/70 mt-0.5">
+                        {currentSkill ? `${currentSkill.price} 0G` : "—"}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentToken(PaymentToken.W0G)}
+                      disabled={isRunning}
+                      className={`py-2.5 px-3 font-display text-xs tracking-widest border-2 border-black rounded-xl btn-brutal disabled:opacity-50 ${
+                        paymentToken === PaymentToken.W0G ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black"
+                      }`}
+                    >
+                      <div>W0G</div>
+                      <div className="font-mono text-[10px] text-current/70 mt-0.5">
+                        {currentSkill ? `${currentSkill.price} W0G` : "—"}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentToken(PaymentToken.USDC)}
+                      disabled={isRunning || !currentSkill || currentSkill.priceUSDC === BigInt(0)}
+                      title={currentSkill?.priceUSDC === BigInt(0) ? "USDC payments disabled by publisher" : undefined}
+                      className={`py-2.5 px-3 font-display text-xs tracking-widest border-2 border-black rounded-xl btn-brutal disabled:opacity-50 disabled:cursor-not-allowed ${
+                        paymentToken === PaymentToken.USDC ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black"
+                      }`}
+                    >
+                      <div>USDC</div>
+                      <div className="font-mono text-[10px] text-current/70 mt-0.5">
+                        {currentSkill && currentSkill.priceUSDC > BigInt(0)
+                          ? `$${ethers.formatUnits(currentSkill.priceUSDC, 6)}`
+                          : "disabled"}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   onClick={handleExecute}
                   disabled={isRunning || !userInput.trim() || !currentSkill?.active}
@@ -439,7 +507,11 @@ function ExecuteContent() {
                     : exec.phase === "waiting"
                     ? "WAITING FOR ORACLE..."
                     : currentSkill
-                    ? `EXECUTE — ${currentSkill.price} 0G →`
+                    ? paymentToken === PaymentToken.USDC
+                      ? `EXECUTE — $${ethers.formatUnits(currentSkill.priceUSDC, 6)} USDC →`
+                      : paymentToken === PaymentToken.W0G
+                      ? `EXECUTE — ${currentSkill.price} W0G →`
+                      : `EXECUTE — ${currentSkill.price} 0G →`
                     : "SELECT A SKILL"}
                 </button>
               </>

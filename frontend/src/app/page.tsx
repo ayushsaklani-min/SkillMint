@@ -29,7 +29,9 @@ interface SkillCard {
 interface Stats {
   skillCount: number;
   totalExecutions: number;
-  totalRevenue: string;
+  revenueNative: string;
+  revenueW0G: string;
+  revenueUSDC: string;
 }
 
 // ─── Helper Components ────────────────────────────────────────────────────
@@ -279,7 +281,7 @@ dl.manifest         `}<span className="text-white/40">{`// ["SKILL.md", "referen
 
 export default function HomePage() {
   const [skills, setSkills] = useState<SkillCard[]>([]);
-  const [stats, setStats] = useState<Stats>({ skillCount: 0, totalExecutions: 0, totalRevenue: "0" });
+  const [stats, setStats] = useState<Stats>({ skillCount: 0, totalExecutions: 0, revenueNative: "0", revenueW0G: "0", revenueUSDC: "0" });
   const [loading, setLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState<"all" | SkillKind>("all");
 
@@ -325,7 +327,7 @@ export default function HomePage() {
         });
       }
 
-      let totalRevWei = BigInt(0);
+      const totals = { native: BigInt(0), w0g: BigInt(0), usdc: BigInt(0) };
       try {
         const filter = escrow.filters.ExecutionConfirmed();
         const latest = await provider.getBlockNumber();
@@ -337,10 +339,13 @@ export default function HomePage() {
           const events = await escrow.queryFilter(filter, from, to);
           for (const ev of events) {
             const parsed = escrow.interface.parseLog({ topics: ev.topics as string[], data: ev.data });
-            if (parsed?.args) {
-              totalRevWei += BigInt(parsed.args.payeeAmount || 0);
-              totalRevWei += BigInt(parsed.args.treasuryAmount || 0);
-            }
+            if (!parsed?.args) continue;
+            const pt = String(parsed.args.paymentToken).toLowerCase();
+            const sum = BigInt(parsed.args.payeeAmount || 0) + BigInt(parsed.args.treasuryAmount || 0);
+            if (pt === ethers.ZeroAddress.toLowerCase()) totals.native += sum;
+            else if (pt === NETWORK.w0g.toLowerCase()) totals.w0g += sum;
+            else if (pt === NETWORK.usdc.toLowerCase()) totals.usdc += sum;
+            else totals.native += sum; // fallback for legacy events without paymentToken
           }
         }
       } catch (e) {
@@ -353,7 +358,9 @@ export default function HomePage() {
         // stat matches the visible grid.
         skillCount: loaded.length,
         totalExecutions: totalExecs,
-        totalRevenue: Number(ethers.formatEther(totalRevWei)).toFixed(3),
+        revenueNative: Number(ethers.formatEther(totals.native)).toFixed(3),
+        revenueW0G: Number(ethers.formatEther(totals.w0g)).toFixed(3),
+        revenueUSDC: Number(ethers.formatUnits(totals.usdc, 6)).toFixed(2),
       });
     } catch (err) {
       console.error("Failed to load:", err);
@@ -468,10 +475,14 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl">
           <FadeIn>
             <div className="bg-white text-black border-2 border-black rounded-3xl shadow-brutal-lg overflow-hidden">
-              <div className="grid grid-cols-3 divide-x-2 divide-black">
+              <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black">
                 <StatBox label="SKILLS MINTED" value={loading ? "…" : stats.skillCount.toString()} />
                 <StatBox label="EXECUTIONS" value={loading ? "…" : stats.totalExecutions.toString()} accent />
-                <StatBox label="0G SETTLED" value={loading ? "…" : stats.totalRevenue} />
+              </div>
+              <div className="grid grid-cols-3 divide-x-2 divide-black">
+                <StatBox label="0G SETTLED" value={loading ? "…" : stats.revenueNative} />
+                <StatBox label="W0G SETTLED" value={loading ? "…" : stats.revenueW0G} />
+                <StatBox label="USDC SETTLED" value={loading ? "…" : `$${stats.revenueUSDC}`} accent />
               </div>
             </div>
           </FadeIn>

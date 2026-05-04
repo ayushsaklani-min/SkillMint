@@ -36,6 +36,7 @@ interface SkillDetail {
   computeProvider: string;
   model: string;
   price: string;
+  priceUSDC: bigint;
   metadata: SkillMeta;
   active: boolean;
   total: number;
@@ -157,6 +158,7 @@ export default function SkillPage() {
         computeProvider: s.computeProvider,
         model: s.model,
         price: ethers.formatEther(s.priceA0GI),
+        priceUSDC: s.priceUSDC ?? BigInt(0),
         metadata,
         active: s.active,
         total: Number(total),
@@ -296,7 +298,8 @@ export default function SkillPage() {
                   <DetailRow label="Kind" value="Agent Skill (folder bundle)" highlight />
                   <DetailRow label="Format" value={skill.metadata.format || "claude-skill"} />
                   <DetailRow label="Compatible with" value={(skill.metadata.compatibleWith || []).join(", ") || "—"} mono />
-                  <DetailRow label="Price / download" value={`${skill.price} W0G`} highlight />
+                  <DetailRow label="Price / download (W0G)" value={`${skill.price} W0G`} highlight />
+                  <DetailRow label="Price / download (USDC.E)" value={skill.priceUSDC === BigInt(0) ? "disabled" : `$${ethers.formatUnits(skill.priceUSDC, 6)}`} />
                   <DetailRow label="Bundle size" value={skill.metadata.sizeBytes ? fmtBytes(skill.metadata.sizeBytes) : "—"} />
                   <DetailRow label="Bundle sha256" value={skill.metadata.bundleSha256 || skill.promptHash} mono />
                   <DetailRow label="Storage root" value={skill.metadata.bundleStorageRoot || "—"} mono />
@@ -305,7 +308,8 @@ export default function SkillPage() {
               ) : (
                 <div className="space-y-3">
                   <DetailRow label="Model" value={skill.model} />
-                  <DetailRow label="Price" value={`${skill.price} 0G`} highlight />
+                  <DetailRow label="Price (0G)" value={`${skill.price} 0G`} highlight />
+                  <DetailRow label="Price (USDC.E)" value={skill.priceUSDC === BigInt(0) ? "disabled" : `$${ethers.formatUnits(skill.priceUSDC, 6)}`} />
                   <DetailRow label="Compute Provider" value={skill.computeProvider} mono />
                   <DetailRow label="Prompt Hash" value={skill.promptHash} mono />
                   <DetailRow label="Created" value={new Date(skill.createdAt * 1000).toLocaleDateString()} />

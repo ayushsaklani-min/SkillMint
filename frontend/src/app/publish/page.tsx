@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { NETWORK, REGISTRY_ABI, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL } from "@/lib/contracts";
+import { fetchOGUsdRate } from "@/lib/price-quote";
 import { hashPrompt } from "@/lib/hash";
 import { parseError } from "@/lib/errors";
 import Navbar from "@/components/navbar";
@@ -46,6 +47,10 @@ export default function PublishPage() {
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [price, setPrice] = useState("0.001");
+  const [priceUSDStr, setPriceUSDStr] = useState("0.01");
+  const [priceA0GIStr, setPriceA0GIStr] = useState("");
+  const [ogUsdRate, setOgUsdRate] = useState<number | null>(null);
+  const [usdcDisabled, setUsdcDisabled] = useState(false);
   const [model, setModel] = useState(DEFAULT_MODEL.value);
   // Each model is bound to the broker provider that actually serves it. If
   // these get out of sync, the oracle's broker call rejects and the contract
@@ -66,6 +71,20 @@ export default function PublishPage() {
   const [bundleManifest, setBundleManifest] = useState<string[]>([]);
   const [bundleErr, setBundleErr] = useState("");
   const [compat, setCompat] = useState<string[]>(["claude-code"]);
+
+  useEffect(() => {
+    if (usdcDisabled) return;
+    const ctrl = new AbortController();
+    fetchOGUsdRate(ctrl.signal).then((rate) => {
+      if (!rate) return;
+      setOgUsdRate(rate);
+      if (priceUSDStr && !priceA0GIStr) {
+        setPriceA0GIStr((Number(priceUSDStr) / rate).toFixed(6));
+      }
+    });
+    return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceUSDStr, usdcDisabled]);
 
   const STEPS = stepsForKind(kind);
 
@@ -134,7 +153,8 @@ export default function PublishPage() {
       }
 
       const promptHash = hashPrompt(systemPrompt);
-      const priceWei = ethers.parseEther(price);
+      const priceA0GI = ethers.parseEther(priceA0GIStr || price);
+      const priceUSDC = usdcDisabled ? BigInt(0) : ethers.parseUnits(priceUSDStr || "0", 6);
       const metadata = JSON.stringify({
         kind: "prompt",
         name,
@@ -144,7 +164,7 @@ export default function PublishPage() {
         algo: enc.algo,
         keyId: enc.keyId,
       });
-      const tx = await registry.registerSkill(promptHash, computeProvider, model, priceWei, metadata);
+      const tx = await registry.registerSkill(promptHash, computeProvider, model, priceA0GI, priceUSDC, metadata);
       await tx.wait();
       const skillCount = await registry.skillCount();
       setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "prompt" });
@@ -175,7 +195,8 @@ export default function PublishPage() {
 
     // 2. Mint NFT — promptHash = bundleSha256 (the cryptographic prompt-equivalent)
     const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
-    const priceWei = ethers.parseEther(price);
+    const priceA0GI = ethers.parseEther(priceA0GIStr || price);
+    const priceUSDC = usdcDisabled ? BigInt(0) : ethers.parseUnits(priceUSDStr || "0", 6);
     const metadata = JSON.stringify({
       kind: "agent-skill",
       name,
@@ -190,7 +211,7 @@ export default function PublishPage() {
       format: "claude-skill",
       compatibleWith: compat,
     });
-    const tx = await registry.registerSkill(enc.sha256, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL, priceWei, metadata);
+    const tx = await registry.registerSkill(enc.sha256, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL, priceA0GI, priceUSDC, metadata);
     await tx.wait();
     const skillCount = await registry.skillCount();
     setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "agent-skill" });
@@ -387,12 +408,31 @@ export default function PublishPage() {
               {step === 3 && kind === "prompt" && (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <Field label="PRICE (0G)">
+                    <Field label="PRICE IN USD (USDC.E)">
                       <input
-                        value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="0.001" min="0.001"
+                        value={priceUSDStr} onChange={(e) => setPriceUSDStr(e.target.value)} type="number" step="0.01" min="0.01"
+                        disabled={usdcDisabled}
+                        className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow disabled:opacity-50"
+                      />
+                    </Field>
+                    <Field label={`PRICE IN 0G ${ogUsdRate ? `(≈ $${ogUsdRate.toFixed(4)}/0G)` : ""}`}>
+                      <input
+                        value={priceA0GIStr || price} onChange={(e) => { setPriceA0GIStr(e.target.value); setPrice(e.target.value); }} type="number" step="0.0001" min="0.0001"
                         className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
                       />
                     </Field>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setUsdcDisabled(!usdcDisabled)}
+                      className={`w-11 h-6 rounded-full border-2 border-black relative transition-colors ${usdcDisabled ? "bg-[#FF3333]" : "bg-[#D4FF00]"}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-black border border-black transition-transform ${usdcDisabled ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+                    </button>
+                    <span className="font-mono text-xs font-bold">{usdcDisabled ? "USDC PAYMENTS DISABLED" : "USDC PAYMENTS ENABLED"}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <Field label="MODEL">
                       <select
                         value={model} onChange={(e) => pickModel(e.target.value)}
@@ -411,9 +451,10 @@ export default function PublishPage() {
                   <div className="bg-[#0038FF] text-white border-2 border-black rounded-2xl p-5">
                     <div className="font-display text-xs tracking-widest mb-3">REVENUE SPLIT</div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span>Price per execution</span><span className="font-mono font-bold">{price} 0G</span></div>
-                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(price) * 0.9).toFixed(4)} 0G</span></div>
-                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(price) * 0.1).toFixed(4)} 0G</span></div>
+                      <div className="flex justify-between"><span>Price per execution (0G)</span><span className="font-mono font-bold">{priceA0GIStr || price} 0G</span></div>
+                      {!usdcDisabled && <div className="flex justify-between"><span>Price per execution (USDC)</span><span className="font-mono font-bold">${priceUSDStr} USDC</span></div>}
+                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(priceA0GIStr || price) * 0.9).toFixed(4)} 0G</span></div>
+                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(priceA0GIStr || price) * 0.1).toFixed(4)} 0G</span></div>
                     </div>
                   </div>
                 </div>
@@ -421,18 +462,38 @@ export default function PublishPage() {
 
               {step === 3 && kind === "agent-skill" && (
                 <div className="space-y-5">
-                  <Field label="PRICE PER DOWNLOAD (W0G)">
-                    <input
-                      value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="0.001" min="0.001"
-                      className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
-                    />
-                  </Field>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="PRICE IN USD (USDC.E)">
+                      <input
+                        value={priceUSDStr} onChange={(e) => setPriceUSDStr(e.target.value)} type="number" step="0.01" min="0.01"
+                        disabled={usdcDisabled}
+                        className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow disabled:opacity-50"
+                      />
+                    </Field>
+                    <Field label="PRICE PER DOWNLOAD (W0G)">
+                      <input
+                        value={priceA0GIStr || price} onChange={(e) => { setPriceA0GIStr(e.target.value); setPrice(e.target.value); }} type="number" step="0.001" min="0.001"
+                        className="w-full h-12 bg-[#FAFAFA] border-2 border-black rounded-xl px-4 text-sm font-mono font-bold focus:outline-none focus:shadow-brutal-sm transition-shadow"
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setUsdcDisabled(!usdcDisabled)}
+                      className={`w-11 h-6 rounded-full border-2 border-black relative transition-colors ${usdcDisabled ? "bg-[#FF3333]" : "bg-[#D4FF00]"}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-black border border-black transition-transform ${usdcDisabled ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+                    </button>
+                    <span className="font-mono text-xs font-bold">{usdcDisabled ? "USDC PAYMENTS DISABLED" : "USDC PAYMENTS ENABLED"}</span>
+                  </div>
                   <div className="bg-[#0038FF] text-white border-2 border-black rounded-2xl p-5">
                     <div className="font-display text-xs tracking-widest mb-3">REVENUE SPLIT (PER DOWNLOAD)</div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span>Price per download</span><span className="font-mono font-bold">{price} W0G</span></div>
-                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(price) * 0.9).toFixed(4)} W0G</span></div>
-                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(price) * 0.1).toFixed(4)} W0G</span></div>
+                      <div className="flex justify-between"><span>Price per download (W0G)</span><span className="font-mono font-bold">{priceA0GIStr || price} W0G</span></div>
+                      {!usdcDisabled && <div className="flex justify-between"><span>Price per download (USDC)</span><span className="font-mono font-bold">${priceUSDStr} USDC</span></div>}
+                      <div className="flex justify-between"><span className="text-[#D4FF00]">Your earnings (90%)</span><span className="font-mono font-bold text-[#D4FF00]">{(Number(priceA0GIStr || price) * 0.9).toFixed(4)} W0G</span></div>
+                      <div className="flex justify-between text-white/70"><span>Protocol fee (10%)</span><span className="font-mono">{(Number(priceA0GIStr || price) * 0.1).toFixed(4)} W0G</span></div>
                     </div>
                   </div>
                 </div>
