@@ -546,8 +546,18 @@ export class SkillMintClient {
    */
   async signPaymentAuthorization(requirements: PaymentRequirements, opts?: { validBeforeSeconds?: number }): Promise<PaymentPayload> {
     const asset = requirements.asset;
-    const assetName = requirements.extra?.name || "Wrapped 0G";
-    const assetVersion = requirements.extra?.version || "1";
+    const assetLower = asset.toLowerCase();
+    let assetName    = requirements.extra?.name;
+    let assetVersion = requirements.extra?.version;
+    if (!assetName || !assetVersion) {
+      if (assetLower === this.network.usdc.toLowerCase()) {
+        assetName = this.network.tokens.usdc.name;
+        assetVersion = this.network.tokens.usdc.version;
+      } else {
+        assetName = this.network.tokens.w0g.name;
+        assetVersion = this.network.tokens.w0g.version;
+      }
+    }
     const now = Math.floor(Date.now() / 1000);
     const validBefore = now + (opts?.validBeforeSeconds ?? 600);
     const nonce = ethers.hexlify(ethers.randomBytes(32));
@@ -662,19 +672,31 @@ export class SkillMintClient {
     const challenge = (await probe.json()) as { accepts?: PaymentRequirements[] };
     const requirements = challenge.accepts?.[0];
     if (!requirements) throw new Error("x402 probe: no paymentRequirements in 402 body");
-    if (requirements.asset.toLowerCase() !== this.network.w0g.toLowerCase()) {
-      throw new Error(`x402 probe: asset ${requirements.asset} != SDK W0G ${this.network.w0g}`);
+    const assetLower = requirements.asset.toLowerCase();
+    const isW0G  = assetLower === this.network.w0g.toLowerCase();
+    const isUSDC = assetLower === this.network.usdc.toLowerCase();
+    if (!isW0G && !isUSDC) {
+      throw new Error(`x402 probe: asset ${requirements.asset} not in SDK accept list (W0G=${this.network.w0g}, USDC=${this.network.usdc})`);
     }
 
-    // 2. Ensure sufficient W0G
+    // 2. Ensure sufficient balance for the chosen asset
     const need = BigInt(requirements.maxAmountRequired);
-    const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
-    if (bal < need) {
-      if (!autoWrap) {
-        throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+    if (isW0G) {
+      const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
+      if (bal < need) {
+        if (!autoWrap) {
+          throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+        }
+        const short = need - bal + ethers.parseEther("0.0005");
+        await this.wrapW0G(ethers.formatEther(short));
       }
-      const short = need - bal + ethers.parseEther("0.0005"); // small buffer
-      await this.wrapW0G(ethers.formatEther(short));
+    } else {
+      // USDC.E: no auto-wrap possible (different asset). Surface a clear error.
+      const bal: bigint = await this.usdc.balanceOf(this.wallet.address);
+      if (bal < need) {
+        const decimals = this.network.tokens.usdc.decimals;
+        throw new Error(`insufficient USDC.E: have ${ethers.formatUnits(bal, decimals)}, need ${ethers.formatUnits(need, decimals)} — bridge USDC via XSwap to top up`);
+      }
     }
 
     // 3. Sign + retry
@@ -701,8 +723,8 @@ export class SkillMintClient {
       receiptRootHash: body.receiptRootHash ?? "",
       settlement: body.settlement ?? { transaction: "", network: requirements.network, payer: this.wallet.address },
       payer: body.settlement?.payer ?? this.wallet.address,
-      paidW0G: ethers.formatEther(need),
-      paidUSDC: "0",
+      paidW0G:  isW0G  ? ethers.formatEther(need) : "0",
+      paidUSDC: isUSDC ? ethers.formatUnits(need, this.network.tokens.usdc.decimals) : "0",
     };
   }
 
@@ -827,19 +849,30 @@ export class SkillMintClient {
     const challenge = (await probe.json()) as { accepts?: PaymentRequirements[] };
     const requirements = challenge.accepts?.[0];
     if (!requirements) throw new Error("downloadAgentSkill: no paymentRequirements in 402 body");
-    if (requirements.asset.toLowerCase() !== this.network.w0g.toLowerCase()) {
-      throw new Error(`downloadAgentSkill: asset ${requirements.asset} != SDK W0G ${this.network.w0g}`);
+    const assetLower = requirements.asset.toLowerCase();
+    const isW0G  = assetLower === this.network.w0g.toLowerCase();
+    const isUSDC = assetLower === this.network.usdc.toLowerCase();
+    if (!isW0G && !isUSDC) {
+      throw new Error(`downloadAgentSkill: asset ${requirements.asset} not in SDK accept list (W0G=${this.network.w0g}, USDC=${this.network.usdc})`);
     }
 
-    // 2. Ensure W0G balance.
+    // 2. Ensure sufficient balance for the chosen asset.
     const need = BigInt(requirements.maxAmountRequired);
-    const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
-    if (bal < need) {
-      if (!autoWrap) {
-        throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+    if (isW0G) {
+      const bal: bigint = await this.w0g.balanceOf(this.wallet.address);
+      if (bal < need) {
+        if (!autoWrap) {
+          throw new Error(`insufficient W0G: have ${ethers.formatEther(bal)}, need ${ethers.formatEther(need)} (pass autoWrap:true or call wrapW0G())`);
+        }
+        const short = need - bal + ethers.parseEther("0.0005");
+        await this.wrapW0G(ethers.formatEther(short));
       }
-      const short = need - bal + ethers.parseEther("0.0005");
-      await this.wrapW0G(ethers.formatEther(short));
+    } else {
+      const bal: bigint = await this.usdc.balanceOf(this.wallet.address);
+      if (bal < need) {
+        const decimals = this.network.tokens.usdc.decimals;
+        throw new Error(`insufficient USDC.E: have ${ethers.formatUnits(bal, decimals)}, need ${ethers.formatUnits(need, decimals)} — bridge USDC via XSwap to top up`);
+      }
     }
 
     // 3. Sign + retry. Response is application/zip + integrity headers.
@@ -895,7 +928,10 @@ export class SkillMintClient {
       receiptRootHash: r.headers.get("x-receipt-root") || "",
       settlement,
       payer: settlement.payer,
-      paidW0G: ethers.formatEther(need),
+      // Agent-skill bundle pricing currently single-amount; if asset was USDC, the
+      // number is in USDC units. DownloadAgentSkillResult keeps paidW0G as the field
+      // name for back-compat. Multi-token agent-skill flow can refine the type later.
+      paidW0G: isW0G ? ethers.formatEther(need) : ethers.formatUnits(need, this.network.tokens.usdc.decimals),
     };
   }
 
