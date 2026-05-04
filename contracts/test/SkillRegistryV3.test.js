@@ -64,4 +64,35 @@ describe("SkillRegistryV3", () => {
     await expect(registry.connect(dev).registerSkill(PROMPT_HASH, PROVIDER, MODEL, PRICE_A0GI, 0n, META))
       .to.not.be.reverted;
   });
+
+  it("migrate rejects zero developer or zero priceA0GI", async () => {
+    const fresh = await (await ethers.getContractFactory("SkillRegistryV3"))
+      .deploy(admin.address, w0g, usdc);
+    await fresh.waitForDeployment();
+
+    const goodSkill = {
+      developer: dev.address,
+      promptHash: PROMPT_HASH,
+      computeProvider: PROVIDER,
+      model: MODEL,
+      priceA0GI: PRICE_A0GI,
+      priceUSDC: PRICE_USDC,
+      metadata: META,
+      executionCount: 0,
+      successfulExecutions: 0,
+      totalRevenueEarned: 0,
+      createdAt: 0,
+      active: true,
+      exists: true,
+    };
+    const zeroDev = { ...goodSkill, developer: ethers.ZeroAddress };
+    const zeroPrice = { ...goodSkill, priceA0GI: 0n };
+
+    await expect(fresh.connect(admin).migrate([1], [zeroDev]))
+      .to.be.revertedWith("migrate: zero developer");
+    await expect(fresh.connect(admin).migrate([1], [zeroPrice]))
+      .to.be.revertedWith("migrate: zero priceA0GI");
+    // Sanity: a good skill still migrates
+    await expect(fresh.connect(admin).migrate([1], [goodSkill])).to.not.be.reverted;
+  });
 });

@@ -185,6 +185,7 @@ contract SkillEscrowV3 is PullPayment, ReentrancyGuard, AccessControl {
         uint256 amount,
         address agent
     ) external onlyRole(FACILITATOR_ROLE) nonReentrant returns (bytes32 executionId) {
+        require(agent != address(0), "agent zero");
         if (!supportedTokens[token]) revert UnsupportedToken(token);
 
         ISkillRegistryV3.Skill memory skill = registry.getSkill(skillId);
@@ -277,6 +278,10 @@ contract SkillEscrowV3 is PullPayment, ReentrancyGuard, AccessControl {
         emit TokenAdded(token);
     }
 
+    /// @dev Removing a token from the allowlist only blocks NEW requests. In-flight executions
+    ///      with this token still settle/refund correctly because confirmExecution and refund
+    ///      read paymentToken from the stored Execution struct, not from supportedTokens.
+    ///      Do NOT add a supportedTokens re-check on those paths — it would brick stuck funds.
     function removeSupportedToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         supportedTokens[token] = false;
         emit TokenRemoved(token);

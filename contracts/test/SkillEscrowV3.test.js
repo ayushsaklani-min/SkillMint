@@ -178,4 +178,13 @@ describe("SkillEscrowV3", () => {
     await escrow.connect(admin).removeSupportedToken(fake);
     expect(await escrow.supportedTokens(fake)).to.equal(false);
   });
+
+  it("requestExecutionPrefunded rejects zero agent", async () => {
+    const { admin, facilitator, escrow, usdc } = await setup();
+    await usdc.connect(admin).mint(await escrow.getAddress(), PRICE_USDC);
+
+    await expect(
+      escrow.connect(facilitator).requestExecutionPrefunded(1, INPUT_HASH, await usdc.getAddress(), PRICE_USDC, ethers.ZeroAddress)
+    ).to.be.revertedWith("agent zero");
+  });
 });

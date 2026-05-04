@@ -126,6 +126,8 @@ contract SkillRegistryV3 is ERC721, ERC2981, AccessControl, ReentrancyGuard, IER
         require(ids.length == skills.length, "len mismatch");
         for (uint256 i; i < ids.length; ++i) {
             require(!_skills[ids[i]].exists, "already migrated");
+            require(skills[i].developer != address(0), "migrate: zero developer");
+            require(skills[i].priceA0GI > 0, "migrate: zero priceA0GI");
             _skills[ids[i]] = skills[i];
             _developerSkills[skills[i].developer].push(ids[i]);
             _mint(skills[i].developer, ids[i]);
