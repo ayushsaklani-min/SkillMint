@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
-import { REGISTRY_ABI, ESCROW_ABI, W0G_ABI } from "./abis.js";
+import { REGISTRY_ABI, ESCROW_ABI, W0G_ABI, USDC_ABI } from "./abis.js";
+import { PaymentToken } from "./types.js";
 import { TESTNET, MAINNET } from "./constants.js";
 import type {
   NetworkConfig,
@@ -70,6 +71,7 @@ export class SkillMintClient {
   readonly registry: ethers.Contract;
   readonly escrow: ethers.Contract;
   readonly w0g: ethers.Contract;
+  readonly usdc: ethers.Contract;
   readonly network: NetworkConfig;
   readonly oracleUrl: string;
   readonly x402Url: string;
@@ -91,6 +93,7 @@ export class SkillMintClient {
     this.registry = new ethers.Contract(this.network.registry, REGISTRY_ABI, this.wallet);
     this.escrow = new ethers.Contract(this.network.escrow, ESCROW_ABI, this.wallet);
     this.w0g = new ethers.Contract(this.network.w0g, W0G_ABI, this.wallet);
+    this.usdc = new ethers.Contract(this.network.usdc, USDC_ABI, this.wallet);
     this.oracleUrl = (options.oracleUrl || this.network.oracleUrl).replace(/\/$/, "");
     this.x402Url = (options.x402Url || this.network.x402Url).replace(/\/$/, "");
   }
@@ -191,25 +194,42 @@ export class SkillMintClient {
    *
    * @param skillId - The skill NFT token ID
    * @param input - Raw input string (will be hashed)
+   * @param options.paymentToken - Payment asset: Native (default), W0G, or USDC
    * @returns ExecutionRequest with executionId and txHash
    */
-  async execute(skillId: number, input: string): Promise<ExecutionRequest> {
+  async execute(
+    skillId: number,
+    input: string,
+    options: { paymentToken?: PaymentToken } = {}
+  ): Promise<ExecutionRequest> {
     const skill = await this.registry.getSkill(skillId);
     if (!skill.active) {
       throw new Error(`Skill #${skillId} is not active`);
     }
-
     const inputHash = ethers.keccak256(ethers.toUtf8Bytes(input));
-    const price = skill.priceA0GI;
+    const paymentToken = options.paymentToken ?? PaymentToken.Native;
 
-    const tx = await this.escrow.requestExecution(skillId, inputHash, {
-      value: price,
-    });
+    let tx: ethers.ContractTransactionResponse;
+
+    if (paymentToken === PaymentToken.Native) {
+      tx = await this.escrow.requestExecution(skillId, inputHash, { value: skill.priceA0GI });
+    } else {
+      const { tokenAddr, tokenContract, amount } = this._tokenFor(paymentToken, skill);
+
+      // Ensure allowance covers payment
+      const allowance: bigint = await tokenContract.allowance(this.wallet.address, this.network.escrow);
+      if (allowance < amount) {
+        const aTx = await tokenContract.approve(this.network.escrow, amount);
+        await aTx.wait();
+      }
+      tx = await this.escrow.requestExecutionWithToken(skillId, inputHash, tokenAddr, amount);
+    }
+
     const receipt = await tx.wait();
+    if (!receipt) throw new Error("execute: missing tx receipt");
 
-    // Parse ExecutionRequested event from receipt
     const event = receipt.logs
-      .map((log: ethers.Log) => {
+      .map((log) => {
         try {
           return this.escrow.interface.parseLog({ topics: log.topics as string[], data: log.data });
         } catch {
@@ -217,26 +237,39 @@ export class SkillMintClient {
         }
       })
       .find((e: ethers.LogDescription | null) => e?.name === "ExecutionRequested");
-
-    if (!event) {
-      throw new Error("ExecutionRequested event not found in transaction receipt");
-    }
+    if (!event) throw new Error("ExecutionRequested event not found in transaction receipt");
 
     const executionId = event.args[0] as string;
 
-    // Hand the real input off to the oracle so the TEE can actually run the skill.
     await httpJson<{ ok: true }>("oracle /input", `${this.oracleUrl}/input`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ executionId, input }),
     });
 
+    const decimals = paymentToken === PaymentToken.USDC ? this.network.tokens.usdc.decimals : 18;
     return {
       executionId,
       skillId: Number(event.args[1]),
       txHash: tx.hash,
-      amount: ethers.formatEther(event.args[4]),
+      amount: ethers.formatUnits(event.args[4] as bigint, decimals),
     };
+  }
+
+  /** Resolve token address + ethers.Contract + raw amount for a non-native paymentToken. */
+  private _tokenFor(t: PaymentToken, skill: { priceA0GI: bigint; priceUSDC: bigint }): {
+    tokenAddr: string;
+    tokenContract: ethers.Contract;
+    amount: bigint;
+  } {
+    if (t === PaymentToken.W0G) {
+      return { tokenAddr: this.network.w0g, tokenContract: this.w0g, amount: skill.priceA0GI };
+    }
+    if (t === PaymentToken.USDC) {
+      if (skill.priceUSDC === 0n) throw new Error(`Skill has USDC payments disabled (priceUSDC = 0)`);
+      return { tokenAddr: this.network.usdc, tokenContract: this.usdc, amount: skill.priceUSDC };
+    }
+    throw new Error(`Unknown paymentToken: ${t}`);
   }
 
   /**
@@ -333,6 +366,8 @@ export class SkillMintClient {
   /** Get execution details by ID */
   async getExecution(executionId: string): Promise<Execution> {
     const raw = await this.escrow.getExecution(executionId);
+    // TODO(Task 11): formatEther is wrong for USDC executions (6 decimals). Format
+    // per-token via this.network.tokens.usdc.decimals when paymentToken is USDC.
     return {
       executionId: raw.executionId,
       skillId: Number(raw.skillId),
@@ -344,6 +379,7 @@ export class SkillMintClient {
       createdAt: new Date(Number(raw.createdAt) * 1000),
       settled: raw.settled,
       refunded: raw.refunded,
+      paymentToken: raw.paymentToken,
     };
   }
 
@@ -666,6 +702,7 @@ export class SkillMintClient {
       settlement: body.settlement ?? { transaction: "", network: requirements.network, payer: this.wallet.address },
       payer: body.settlement?.payer ?? this.wallet.address,
       paidW0G: ethers.formatEther(need),
+      paidUSDC: "0",
     };
   }
 
@@ -950,6 +987,9 @@ export class SkillMintClient {
       // metadata might not be valid JSON
     }
 
+    const priceUSDCRaw = (raw.priceUSDC as bigint | undefined) ?? 0n;
+    const priceUSDC = ethers.formatUnits(priceUSDCRaw, this.network.tokens.usdc.decimals);
+
     return {
       id: skillId,
       developer: raw.developer as string,
@@ -959,6 +999,8 @@ export class SkillMintClient {
       model: raw.model as string,
       price: ethers.formatEther(raw.priceA0GI as bigint),
       priceWei: raw.priceA0GI as bigint,
+      priceUSDC,
+      priceUSDCRaw,
       metadata,
       executionCount: Number(raw.executionCount),
       successfulExecutions: Number(raw.successfulExecutions),
