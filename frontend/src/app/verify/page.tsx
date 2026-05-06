@@ -22,7 +22,9 @@ interface ReceiptData {
   providerAddress: string;
   nftOwner?: string;
   timestamp: number;
-  paidA0GI: string;
+  paidA0GI?: string;
+  paidW0G?: string;
+  paidUSDC?: string;
   paymentToken?: string;
   output: string;
 }
@@ -323,13 +325,13 @@ function VerifyContent() {
                       : pt.toLowerCase() === NETWORK.w0g.toLowerCase() ? "W0G"
                       : pt.toLowerCase() === NETWORK.usdc.toLowerCase() ? "USDC.E"
                       : "?";
-                    const decimals = tokenLabel === "USDC.E" ? 6 : 18;
-                    let display: string;
-                    try {
-                      display = `${ethers.formatUnits(receipt.paidA0GI, decimals)} ${tokenLabel}`;
-                    } catch {
-                      display = `${receipt.paidA0GI} ${tokenLabel}`;
-                    }
+                    // Oracle stamps a different paid* field per token, already
+                    // human-readable formatted. Read the right one.
+                    const paidStr =
+                      tokenLabel === "USDC.E" ? receipt.paidUSDC :
+                      tokenLabel === "W0G"    ? receipt.paidW0G  :
+                                                receipt.paidA0GI;
+                    const display = paidStr ? `${paidStr} ${tokenLabel}` : `— ${tokenLabel}`;
                     return <DetailRow label="Amount Paid" value={display} highlight />;
                   })()}
                   {receipt.nftOwner && <DetailRow label="Revenue To" value={receipt.nftOwner} mono />}

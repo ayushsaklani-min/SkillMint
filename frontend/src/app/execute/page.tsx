@@ -449,7 +449,7 @@ function ExecuteContent() {
                   <label className="font-display text-sm tracking-wide mb-2 block">
                     3 — PAYMENT TOKEN
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentToken(PaymentToken.Native)}
@@ -465,19 +465,6 @@ function ExecuteContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPaymentToken(PaymentToken.W0G)}
-                      disabled={isRunning}
-                      className={`py-2.5 px-3 font-display text-xs tracking-widest border-2 border-black rounded-xl btn-brutal disabled:opacity-50 ${
-                        paymentToken === PaymentToken.W0G ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black"
-                      }`}
-                    >
-                      <div>W0G</div>
-                      <div className="font-mono text-[10px] text-current/70 mt-0.5">
-                        {currentSkill ? `${currentSkill.price} W0G` : "—"}
-                      </div>
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setPaymentToken(PaymentToken.USDC)}
                       disabled={isRunning || !currentSkill || currentSkill.priceUSDC === BigInt(0)}
                       title={currentSkill?.priceUSDC === BigInt(0) ? "USDC payments disabled by publisher" : undefined}
@@ -485,7 +472,7 @@ function ExecuteContent() {
                         paymentToken === PaymentToken.USDC ? "bg-[#D4FF00] text-black shadow-brutal-sm" : "bg-white text-black"
                       }`}
                     >
-                      <div>USDC</div>
+                      <div>USDC.E</div>
                       <div className="font-mono text-[10px] text-current/70 mt-0.5">
                         {currentSkill && currentSkill.priceUSDC > BigInt(0)
                           ? `$${ethers.formatUnits(currentSkill.priceUSDC, 6)}`
