@@ -19,7 +19,7 @@
 
 <br/>
 
-**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan.0g.ai)** · **[📂 0G StorageScan](https://storagescan.0g.ai)**
+**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🔗 0G ChainScan](https://chainscan.0g.ai)** · **[📂 0G StorageScan](https://storagescan.0g.ai)** · https://www.youtube.com/watch?v=CE35T3lOz4Q
 
 </div>
 
