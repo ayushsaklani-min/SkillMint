@@ -7,13 +7,15 @@
 ### The Verified AI Skill Execution Protocol
 
 *Every execution **TEE-attested**. Every payment **automatic**. Every result **provable**.*
+*Pay in **0G**, **W0G**, or **USDC.E** — humans on the dashboard, agents over x402.*
 
 <br/>
 
 ![Built on 0G](https://img.shields.io/badge/BUILT_ON-0G_ARISTOTLE_MAINNET-0038FF?style=for-the-badge&labelColor=000000)
 ![TEE Attested](https://img.shields.io/badge/TEE-ATTESTED-D4FF00?style=for-the-badge&labelColor=000000)
+![USDC.E](https://img.shields.io/badge/PAYMENTS-0G_·_W0G_·_USDC.E-20C20E?style=for-the-badge&labelColor=000000)
 ![Hackathon](https://img.shields.io/badge/0G_APAC-HACKATHON_2026-0038FF?style=for-the-badge&labelColor=000000)
-![Status](https://img.shields.io/badge/STATUS-LIVE_ON_MAINNET-D4FF00?style=for-the-badge&labelColor=000000)
+![Status](https://img.shields.io/badge/STATUS-LIVE_ON_MAINNET_V3-D4FF00?style=for-the-badge&labelColor=000000)
 
 <br/>
 
@@ -49,21 +51,21 @@ AI models are **black boxes**. When an agent calls an AI and gets back a result,
 
 ## ![THE FIX](https://img.shields.io/badge/✨-THE_FIX-D4FF00?style=for-the-badge&labelColor=000000)
 
-**SkillMint** turns AI system prompts into tradeable **ERC-721 NFTs**, then wraps every execution in a **Trusted Execution Environment** (TEE) on the 0G network. Every output ships with a hardware-signed receipt that's cryptographically impossible to fake.
+**SkillMint** turns AI system prompts into tradeable **ERC-721 NFTs**, then wraps every execution in a **Trusted Execution Environment** (TEE) on the 0G network. Every output ships with a hardware-signed receipt that's cryptographically impossible to fake. Skills carry **two prices on-chain** (0G + USDC.E), and both humans and agents can pay in any of three assets.
 
 ```
-┌──────────┐   pay OG    ┌──────────────┐   verified output    ┌──────────┐
-│  AGENT   ├────────────▶│  TEE  RUNS   ├─────────────────────▶│  AGENT   │
-│          │  + input    │  SKILL NFT   │   + TEE attestation  │  (happy) │
-└──────────┘             └──────┬───────┘                      └──────────┘
-                                │
-                    ┌───────────┴────────────┐
-                    ▼                        ▼
-           ┌────────────────┐       ┌──────────────────┐
-           │ 90% → NFT      │       │ Receipt →        │
-           │    OWNER       │       │   0G STORAGE     │
-           │ 10% → PROTOCOL │       │ (root on-chain)  │
-           └────────────────┘       └──────────────────┘
+┌──────────┐  pay 0G/W0G/USDC.E  ┌──────────────┐   verified output    ┌──────────┐
+│  AGENT   ├────────────────────▶│  TEE  RUNS   ├─────────────────────▶│  AGENT   │
+│  HUMAN   │      + input        │  SKILL NFT   │   + TEE attestation  │  (happy) │
+└──────────┘                     └──────┬───────┘                      └──────────┘
+                                        │
+                            ┌───────────┴────────────┐
+                            ▼                        ▼
+                   ┌────────────────┐       ┌──────────────────┐
+                   │ 90% → NFT      │       │ Receipt →        │
+                   │    OWNER       │       │   0G STORAGE     │
+                   │ 10% → PROTOCOL │       │ (root on-chain)  │
+                   └────────────────┘       └──────────────────┘
 ```
 
 ## ![WHY TEE](https://img.shields.io/badge/🔐-WHY_TEE-0038FF?style=for-the-badge&labelColor=000000)
@@ -78,22 +80,27 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 
 | Package            | What's Inside                                                          |
 |--------------------|------------------------------------------------------------------------|
-| **`contracts/`**   | `SkillRegistryV2` (ERC-721 + ERC-2981) · `SkillEscrowV2` (PullPayment) |
-| **`oracle/`**      | Event watcher → 0G Compute TEE → receipt on 0G Storage → on-chain confirm |
-| **`frontend/`**    | Next.js 16 · neo-brutalist UI · ethers.js · scroll-driven explainer    |
-| **`sdk/`**         | TypeScript SDK · `@skillmint/sdk` — `listSkills` · `executeX402` · `downloadAgentSkill` · `verifyReceipt` · `registerSkill` · `registerAgentSkill` |
+| **`contracts/`**   | `SkillRegistryV3` (ERC-721 + dual-price + asset-aware `priceFor`) · `SkillEscrowV3` (multi-token: native PullPayment + ERC-20 push, `FACILITATOR_ROLE`, `unallocatedTokenBalance` bookkeeping) |
+| **`oracle/`**      | Event watcher → 0G Compute TEE → receipt on 0G Storage → on-chain confirm; reads `paymentToken` per execution and stamps it into the receipt |
+| **`facilitator/`** | x402 facilitator — multi-asset `/supported`, `/verify`, `/settle` (W0G + USDC.E) |
+| **`frontend/`**    | Next.js 16 · neo-brutalist UI · ethers.js · 3-button payment-token selector · publish-form CoinGecko auto-fill |
+| **`sdk/`**         | TypeScript SDK · `@skillmint/sdk` — `listSkills` · `execute({paymentToken})` · `executeX402` (W0G + USDC.E) · `downloadAgentSkill` · `verifyReceipt` · `registerSkill` (dual price) |
 | **`skills/`**      | Seed skill registry + `register-all.js` bootstrap                      |
-| **`shared/`**      | ABIs + network config (testnet ↔ mainnet)                              |
+| **`shared/`**      | ABIs (V3 + USDC) + network config with `tokens` map (testnet ↔ mainnet) |
 | **`tee-sandbox/`** | Standalone TEE compute test harness                                    |
 
 ## ![EXECUTION FLOW](https://img.shields.io/badge/🔁-EXECUTION_FLOW-D4FF00?style=for-the-badge&labelColor=000000)
 
-1. **Creator** publishes a skill → mints `SkillRegistryV2` NFT, prompt encrypted on 0G Storage
-2. **Agent** calls `SkillEscrow.requestExecution(skillId, input)` with OG payment
-3. **Oracle** watches `ExecutionRequested`, forwards to 0G Compute TEE
+1. **Creator** publishes a skill → mints `SkillRegistryV3` NFT with **two prices** (`priceA0GI` + `priceUSDC`), prompt encrypted on 0G Storage
+2. **Caller picks a token**:
+   - **Native 0G** → `escrow.requestExecution(skillId, input)` payable
+   - **W0G** (ERC-20 dashboard) → `approve` + `escrow.requestExecutionWithToken(skillId, input, w0g, amount)`
+   - **USDC.E** (ERC-20 dashboard) → `approve` + `escrow.requestExecutionWithToken(skillId, input, usdc, amount)`
+   - **W0G or USDC.E via x402** (gasless agent flow) → facilitator settles EIP-3009 `transferWithAuthorization`, then calls `escrow.requestExecutionPrefunded(...)`
+3. **Oracle** watches `ExecutionRequested(... paymentToken)`, forwards to 0G Compute TEE
 4. **TEE** runs the skill, returns signed output + attestation
-5. **Oracle** uploads receipt to 0G Storage, calls `confirmExecution(root)` on-chain
-6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol
+5. **Oracle** uploads receipt to 0G Storage with the right `paid*` field, calls `confirmExecution(executionId, root)` on-chain
+6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol — native via PullPayment, ERC-20 via push transfer
 7. **Anyone** can verify the receipt against the on-chain root — forever
 
 ## ![QUICK START](https://img.shields.io/badge/🚀-QUICK_START-0038FF?style=for-the-badge&labelColor=000000)
@@ -108,16 +115,24 @@ cd oracle && npm install && cp .env.example .env && npm start
 # Contracts — tests
 cd contracts && npm install && npx hardhat test
 
-# Deploy to 0G Aristotle Mainnet
-cd contracts && npx hardhat run scripts/deploy-v2.js --network mainnet
-# (or --network testnet for Galileo)
+# Deploy V3 contracts to 0G Aristotle Mainnet
+cd contracts
+ORACLE_ADDRESS=0x... TREASURY_ADDRESS=0x... \
+  npx hardhat run scripts/deploy-v3.js --network mainnet
+
+# Wire facilitator role + supported tokens (W0G + USDC.E on mainnet)
+ESCROW_V3_ADDRESS=0x... FACILITATOR_ADDRESS=0x... \
+  npx hardhat run scripts/add-supported-tokens.js --network mainnet
+
+# (For testnet: deploy MockUSDC first via deploy-mock-usdc.js, then pass
+#  MOCK_USDC_ADDRESS=... into deploy-v3.js + add-supported-tokens.js)
 ```
 
 ## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
 
-**`@skillmint/sdk`** — TypeScript client for agents. Two skill kinds:
-- **AI skills** (prompt) — pay with W0G via [x402](https://x402.org), run inside a 0G Compute TEE, verify the signed receipt.
-- **Agent skills** (folder bundles) — pay with W0G, download an encrypted `.skill` zip (Anthropic Claude / Codex / Cursor compatible), sha256-verify locally.
+**`@skillmint/sdk`** — TypeScript client for agents. Two skill kinds, three payment tokens:
+- **AI skills** (prompt) — pay with native 0G, W0G, or USDC.E (humans on dashboard, agents over x402), run inside a 0G Compute TEE, verify the signed receipt.
+- **Agent skills** (folder bundles) — pay via x402 (W0G or USDC.E), download an encrypted `.skill` zip (Anthropic Claude / Codex / Cursor compatible), sha256-verify locally.
 
 Defaults point at the live Vercel-proxied backend, so no URL configuration is required.
 
@@ -126,18 +141,27 @@ npm install @skillmint/sdk ethers
 ```
 
 ```typescript
-import { SkillMintClient } from "@skillmint/sdk";
+import { SkillMintClient, PaymentToken } from "@skillmint/sdk";
 
 const client = new SkillMintClient({
   privateKey: process.env.PRIVATE_KEY!,
   network: "mainnet",   // default — pass "testnet" for Galileo
 });
 
-// 1. Discover
+// 1. Discover — every skill exposes both prices
 const skills = await client.listSkills();
+//   skills[0].price       → "0.001"  (0G, human-readable)
+//   skills[0].priceUSDC   → "0.01"   (USDC.E, human-readable; "0" if disabled)
+//   skills[0].priceUSDCRaw → 10000n  (6-decimal units)
 
-// 2. Execute via x402 — auto-wraps native 0G into W0G if balance is short,
-//    signs an EIP-3009 authorization, settles on-chain, returns the output.
+// 2a. Direct dashboard execution — pick a token (defaults to Native)
+const r1 = await client.execute(2, "How do I deploy on 0G?", { paymentToken: PaymentToken.USDC });
+//   sends approve + requestExecutionWithToken under the hood;
+//   pays exactly skill.priceUSDC USDC.E to the escrow.
+
+// 2b. Agent execution via x402 — gasless EIP-3009, picks W0G or USDC.E based on
+//     what the facilitator advertises in /supported. Auto-wraps 0G→W0G if needed
+//     and the asset is W0G; for USDC.E you need bridged balance up front.
 const result = await client.executeX402(
   2,                                                   // skillId — "0G Expert" on mainnet
   "How do I deploy a contract to 0G chain using hardhat?"
@@ -145,6 +169,7 @@ const result = await client.executeX402(
 console.log(result.output);
 console.log("settle tx :", result.settlement.transaction);
 console.log("receipt   :", result.receiptRootHash);
+console.log("paid       :", result.paidW0G !== "0" ? `${result.paidW0G} W0G` : `${result.paidUSDC} USDC.E`);
 
 // 3. Verify the receipt — anyone can. Recomputes input/output hashes,
 //    checks the TEE-attestation flag from inside the enclave.
@@ -183,13 +208,13 @@ await client.registerAgentSkill({
 
 | Surface          | Methods |
 |------------------|---------|
-| **Discovery**    | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` · `getReputation` |
-| **AI skills**    | `executeX402` (x402 + W0G) · `executeAndWait` (native escrow) · `getExecutionOutcome` |
+| **Discovery**    | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` (returns both prices) · `getReputation` |
+| **AI skills**    | `execute(id, input, { paymentToken })` (Native / W0G / USDC) · `executeX402` (x402 + W0G or USDC.E) · `executeAndWait` · `getExecutionOutcome` |
 | **Agent skills** | `registerAgentSkill` (publish folder bundle) · `downloadAgentSkill` (buy + sha256-verify) |
 | **W0G**          | `wrapW0G` · `unwrapW0G` · `getW0GBalance` |
 | **Receipts**     | `fetchReceipt` · `verifyReceipt` (works on both kinds; pass `{ bundle }` for agent skills) |
-| **Publish**      | `registerSkill` (prompt) · `registerAgentSkill` (folder bundle) |
-| **Owner**        | `updatePrice` · `deactivateSkill` · `transferSkill` · `withdrawRevenue` |
+| **Publish**      | `registerSkill` (prompt; takes `priceA0GI` + `priceUSDC`) · `registerAgentSkill` (folder bundle) |
+| **Owner**        | `updatePrice(id, priceA0GI, priceUSDC)` (atomic dual-price update) · `deactivateSkill` · `transferSkill` · `withdrawRevenue` |
 
 Runnable end-to-end examples — discovers skills, picks one, pays via x402, verifies the receipt — live at [`sdk/examples/agent-run.mjs`](sdk/examples/agent-run.mjs) (prompt skill) and [`sdk/examples/agent-skill-e2e.mjs`](sdk/examples/agent-skill-e2e.mjs) (agent skill, end-to-end on Galileo). Zero URL overrides.
 
@@ -200,13 +225,27 @@ Runnable end-to-end examples — discovers skills, picks one, pays via x402, ver
 | **AI Skill** (prompt) | A system prompt run inside a TEE (0G Compute hardware enclave) | TEE attestation — model + prompt + output cryptographically signed by the enclave |
 | **Agent Skill** (folder) | A `.skill` zip bundle (SKILL.md + reference markdown), Claude Code / Codex / Cursor compatible | Tamper-proof distribution — sha256 of the bundle is anchored on-chain; download verifies byte-for-byte |
 
+## ![PAYMENT TOKENS](https://img.shields.io/badge/💸-PAYMENT_TOKENS-20C20E?style=for-the-badge&labelColor=000000)
+
+V3 skills carry **two on-chain prices** independently — `priceA0GI` (native 0G wei, also the W0G price 1:1) and `priceUSDC` (6-decimal USDC.E units). Publishers set both at mint time; the publish form auto-fills the 0G price from a live CoinGecko quote. `priceUSDC = 0` is a sentinel meaning "USDC payments disabled for this skill."
+
+| Token | Decimals | Path | Who pays |
+|---|---|---|---|
+| **Native 0G** | 18 | `escrow.requestExecution()` payable, settles via OpenZeppelin `PullPayment` | Humans on the dashboard |
+| **W0G** (DemoW0G with EIP-3009) | 18 | `approve` + `requestExecutionWithToken` (dashboard) **or** EIP-3009 `transferWithAuthorization` + `requestExecutionPrefunded` (x402, gasless) | Humans + agents |
+| **USDC.E** (XSwap-bridged Circle FiatToken v2) | 6 | Same two paths as W0G (dashboard or x402) | Humans + agents |
+
+The escrow uses an `unallocatedTokenBalance[token]` mapping to bookkeep ERC-20 deposits across the dashboard `transferFrom` path and the x402 prefunded path — every settle/refund decrements this so the invariant always equals "ERC-20 balance committed to known executions."
+
+**Why dual price (not USD-canonical)?** 0G mainnet is too new to have a battle-tested USD price feed. Dual-price ships zero new on-chain failure modes; publishers control margins explicitly. When Chainlink price feeds land, USD-canonical pricing becomes a one-line opt-in.
+
+**Why a custom W0G?** The canonical 0G `Wrapped0GBase` precompile lacks EIP-3009 `transferWithAuthorization`. SkillMint deploys its own DemoW0G wrapper (1:1 with native, plus EIP-3009) so x402 actually works against W0G. USDC.E ships with EIP-3009 out of the box (Circle FiatToken v2), so no shim there.
+
 ## ![LIVE DEPLOYMENT](https://img.shields.io/badge/🌐-LIVE_DEPLOYMENT-D4FF00?style=for-the-badge&labelColor=000000)
 
-> **Status:** ![Mainnet](https://img.shields.io/badge/0G_ARISTOTLE_MAINNET-LIVE-20C20E?style=flat-square&labelColor=000000) · ![Testnet](https://img.shields.io/badge/0G_GALILEO-AVAILABLE-D4FF00?style=flat-square&labelColor=000000) — running on **0G Aristotle Mainnet** (chainId `16661`). Testnet `16602` still supported via `network: "testnet"`.
+> **Status:** ![Mainnet](https://img.shields.io/badge/0G_ARISTOTLE_MAINNET-LIVE_V3-20C20E?style=flat-square&labelColor=000000) · ![Testnet](https://img.shields.io/badge/0G_GALILEO-V3-D4FF00?style=flat-square&labelColor=000000) — running on **0G Aristotle Mainnet** (chainId `16661`). Testnet `16602` mirrors mainnet shape with a MockUSDC stand-in.
 >
-> **Live mainnet skills (TEE-attested via qwen3-vl-30b):**
-> - `#2` — **0G Expert** ([buy](https://skillmint-0g.vercel.app/skill/2))
-> - `#3` — **Fhenix Expert** ([buy](https://skillmint-0g.vercel.app/skill/3))
+> Skill IDs from V2 are being re-published on V3 by their original publishers. The dashboard at [`skillmint-0g.vercel.app`](https://skillmint-0g.vercel.app) is the live source of truth for current V3 skill numbering.
 
 ### Mainnet (0G Aristotle · chainId 16661)
 
@@ -214,18 +253,22 @@ Runnable end-to-end examples — discovers skills, picks one, pays via x402, ver
 |-----------|---------|
 | **Frontend** | [`skillmint-0g.vercel.app`](https://skillmint-0g.vercel.app) · Vercel |
 | **Oracle / Facilitator / x402 server** | AWS EC2 · `ap-south-1` · systemd |
-| **SkillRegistryV2** | `0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09` · [ChainScan](https://chainscan.0g.ai/address/0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09) |
-| **SkillEscrowV2** | `0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5` · [ChainScan](https://chainscan.0g.ai/address/0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5) |
+| **SkillRegistryV3** | `0xdF28e06899955092DF81f0DBea03496D1Ac8904E` · [ChainScan](https://chainscan.0g.ai/address/0xdF28e06899955092DF81f0DBea03496D1Ac8904E) |
+| **SkillEscrowV3** | `0xA0e5A7d722399f59A0Ee4B8DF740107FBC63f7ae` · [ChainScan](https://chainscan.0g.ai/address/0xA0e5A7d722399f59A0Ee4B8DF740107FBC63f7ae) |
 | **DemoW0G** (Wrapped 0G · EIP-3009) | `0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01` · [ChainScan](https://chainscan.0g.ai/address/0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01) |
+| **USDC.E** (XSwap-bridged Circle FiatToken v2 · EIP-3009 + EIP-2612) | `0x1f3aa82227281ca364bfb3d253b0f1af1da6473e` · [ChainScan](https://chainscan.0g.ai/address/0x1f3aa82227281ca364bfb3d253b0f1af1da6473e) |
 | **TEE compute** | qwen3-vl-30b · deepseek-v3 · GLM-5-FP8 · gpt-5.4-mini |
 
-### Testnet (0G Galileo · chainId 16602 · still supported)
+> **Retired V2 (still on chain, no longer referenced by SkillMint):** `SkillRegistryV2` `0x14cE…8F09` · `SkillEscrowV2` `0xD738…8Ea5`.
+
+### Testnet (0G Galileo · chainId 16602)
 
 | Component | Address |
 |-----------|---------|
-| **SkillRegistryV2** | `0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4) |
-| **SkillEscrowV2** | `0xe2841b105B695610f2c1194f8865474A536184dB` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0xe2841b105B695610f2c1194f8865474A536184dB) |
+| **SkillRegistryV3** | `0xe052332AA56c179FF9A8B2bCFCCb5679d2BCe9d3` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0xe052332AA56c179FF9A8B2bCFCCb5679d2BCe9d3) |
+| **SkillEscrowV3** | `0x4ca3Fe8a467C734c31a34a345F6819e5767cAD9C` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x4ca3Fe8a467C734c31a34a345F6819e5767cAD9C) |
 | **W0G** (Wrapped 0G · EIP-3009) | `0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D) |
+| **MockUSDC** (testnet 6-decimal stand-in · public mint) | `0x1605FF6E8aB0Bd7F846cf99268B669764F981C06` · [Galileo ChainScan](https://chainscan-galileo.0g.ai/address/0x1605FF6E8aB0Bd7F846cf99268B669764F981C06) |
 
 ## ![DESIGN](https://img.shields.io/badge/🎨-DESIGN-0038FF?style=for-the-badge&labelColor=000000)
 
