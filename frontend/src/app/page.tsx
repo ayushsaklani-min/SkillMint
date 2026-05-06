@@ -30,7 +30,6 @@ interface Stats {
   skillCount: number;
   totalExecutions: number;
   revenueNative: string;
-  revenueW0G: string;
   revenueUSDC: string;
 }
 
@@ -281,7 +280,7 @@ dl.manifest         `}<span className="text-white/40">{`// ["SKILL.md", "referen
 
 export default function HomePage() {
   const [skills, setSkills] = useState<SkillCard[]>([]);
-  const [stats, setStats] = useState<Stats>({ skillCount: 0, totalExecutions: 0, revenueNative: "0", revenueW0G: "0", revenueUSDC: "0" });
+  const [stats, setStats] = useState<Stats>({ skillCount: 0, totalExecutions: 0, revenueNative: "0", revenueUSDC: "0" });
   const [loading, setLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState<"all" | SkillKind>("all");
 
@@ -358,8 +357,8 @@ export default function HomePage() {
         // stat matches the visible grid.
         skillCount: loaded.length,
         totalExecutions: totalExecs,
-        revenueNative: Number(ethers.formatEther(totals.native)).toFixed(3),
-        revenueW0G: Number(ethers.formatEther(totals.w0g)).toFixed(3),
+        // Native 0G and W0G are the same economic asset (1:1 wrapper); show one combined total.
+        revenueNative: Number(ethers.formatEther(totals.native + totals.w0g)).toFixed(3),
         revenueUSDC: Number(ethers.formatUnits(totals.usdc, 6)).toFixed(2),
       });
     } catch (err) {
@@ -479,9 +478,8 @@ export default function HomePage() {
                 <StatBox label="SKILLS MINTED" value={loading ? "…" : stats.skillCount.toString()} />
                 <StatBox label="EXECUTIONS" value={loading ? "…" : stats.totalExecutions.toString()} accent />
               </div>
-              <div className="grid grid-cols-3 divide-x-2 divide-black">
+              <div className="grid grid-cols-2 divide-x-2 divide-black">
                 <StatBox label="0G SETTLED" value={loading ? "…" : stats.revenueNative} />
-                <StatBox label="W0G SETTLED" value={loading ? "…" : stats.revenueW0G} />
                 <StatBox label="USDC SETTLED" value={loading ? "…" : `$${stats.revenueUSDC}`} accent />
               </div>
             </div>

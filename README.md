@@ -103,31 +103,6 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
 6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol — native via PullPayment, ERC-20 via push transfer
 7. **Anyone** can verify the receipt against the on-chain root — forever
 
-## ![QUICK START](https://img.shields.io/badge/🚀-QUICK_START-0038FF?style=for-the-badge&labelColor=000000)
-
-```bash
-# Frontend — localhost:3000
-cd frontend && npm install --legacy-peer-deps && npm run dev
-
-# Oracle — watch + confirm executions
-cd oracle && npm install && cp .env.example .env && npm start
-
-# Contracts — tests
-cd contracts && npm install && npx hardhat test
-
-# Deploy V3 contracts to 0G Aristotle Mainnet
-cd contracts
-ORACLE_ADDRESS=0x... TREASURY_ADDRESS=0x... \
-  npx hardhat run scripts/deploy-v3.js --network mainnet
-
-# Wire facilitator role + supported tokens (W0G + USDC.E on mainnet)
-ESCROW_V3_ADDRESS=0x... FACILITATOR_ADDRESS=0x... \
-  npx hardhat run scripts/add-supported-tokens.js --network mainnet
-
-# (For testnet: deploy MockUSDC first via deploy-mock-usdc.js, then pass
-#  MOCK_USDC_ADDRESS=... into deploy-v3.js + add-supported-tokens.js)
-```
-
 ## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
 
 **`@skillmint/sdk`** — TypeScript client for agents. Two skill kinds, three payment tokens:
