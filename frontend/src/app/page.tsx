@@ -359,7 +359,14 @@ export default function HomePage() {
         totalExecutions: totalExecs,
         // Native 0G and W0G are the same economic asset (1:1 wrapper); show one combined total.
         revenueNative: Number(ethers.formatEther(totals.native + totals.w0g)).toFixed(3),
-        revenueUSDC: Number(ethers.formatUnits(totals.usdc, 6)).toFixed(2),
+        // USDC: show 2 decimals for normal amounts, but surface sub-cent settles
+        // as "<$0.01" so a real $0.0011 doesn't display as "$0.00".
+        revenueUSDC: (() => {
+          const n = Number(ethers.formatUnits(totals.usdc, 6));
+          if (n === 0) return "0.00";
+          if (n < 0.01) return "<0.01";
+          return n.toFixed(2);
+        })(),
       });
     } catch (err) {
       console.error("Failed to load:", err);
