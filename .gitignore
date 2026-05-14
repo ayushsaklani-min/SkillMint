@@ -19,9 +19,12 @@ contracts/typechain-types/
 # Environment files
 .env
 .env.local
+.env.*
 .env.*.local
 *.env
 .env.txt
+!.env.example
+!.env.*.example
 
 # Logs
 *.log
@@ -57,6 +60,12 @@ coverage/
 
 # Misc
 .cache/
+frontend/.git/
+scripts/run-artifacts/
+sdk/_out_*/
+sdk/examples/.html
+sdk/examples/ddc-deploy/
+skills/execution-log.json
 
 # Secrets — never commit private keys or cert material
 *.pem

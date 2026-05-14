@@ -26,6 +26,7 @@ import { decodePaymentHeader } from '../../facilitator/src/x402.js';
 import { loadSystemPrompt } from './index-helpers.js';
 import { decryptBuffer } from './crypto.js';
 import { sha256Hex } from './agent-skill-bundle.js';
+import { TESTNET, MAINNET } from '../../shared/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,24 +36,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // our x402 code elsewhere uses the latter.
 const _NETWORK_RAW = process.env.NETWORK || '0g-testnet';
 const IS_TESTNET = _NETWORK_RAW === '0g-testnet' || _NETWORK_RAW === 'testnet';
+const NET = IS_TESTNET ? TESTNET : MAINNET;
 const NETWORK = IS_TESTNET ? '0g-testnet' : '0g-mainnet';
-const RPC_URL = IS_TESTNET ? 'https://evmrpc-testnet.0g.ai' : 'https://evmrpc.0g.ai';
-const INDEXER_URL = IS_TESTNET
-  ? 'https://indexer-storage-testnet-turbo.0g.ai'
-  : 'https://indexer-storage-turbo.0g.ai';
-const REGISTRY_ADDR = IS_TESTNET
-  ? '0x7e244F7F4fcfaE918a9554e3E59485db2A5687e4'
-  : '0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09';
+const RPC_URL = NET.rpcUrl;
+const INDEXER_URL = NET.storageIndexer;
+const REGISTRY_ADDR = NET.contracts.registry;
 // SkillMint DemoW0G (EIP-3009 enabled). Override via W0G_ADDRESS env if needed.
-const W0G_ADDR = process.env.W0G_ADDRESS || (IS_TESTNET
-  ? '0x45B5287f055Ac4B1C8365Fb017009B40a8e72D0D'
-  : '0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01');
+const W0G_ADDR = process.env.W0G_ADDRESS || NET.contracts.w0g;
 const FACILITATOR_URL = process.env.FACILITATOR_URL || 'http://127.0.0.1:3099';
 const PORT = Number(process.env.X402_PORT || 3003);
 const MOCK_INFERENCE = process.env.MOCK_INFERENCE === '1';
 const BASE_URL = process.env.X402_BASE_URL || `http://localhost:${PORT}`;
 
-const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistry.json'), 'utf8'));
+const REGISTRY_ABI = JSON.parse(fs.readFileSync(path.join(__dirname, '../../shared/abis/SkillRegistryV3.json'), 'utf8'));
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 const provider = new ethers.JsonRpcProvider(RPC_URL);

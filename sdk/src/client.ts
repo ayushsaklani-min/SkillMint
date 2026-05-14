@@ -272,6 +272,10 @@ export class SkillMintClient {
     throw new Error(`Unknown paymentToken: ${t}`);
   }
 
+  private _parseUSDC(amount: string): bigint {
+    return ethers.parseUnits(amount, this.network.tokens.usdc.decimals);
+  }
+
   /**
    * Execute a skill and wait for the oracle to confirm it.
    * Returns the full execution result including receipt hash.
@@ -402,6 +406,7 @@ export class SkillMintClient {
    * @param params.computeProvider - 0G Compute provider address
    * @param params.model - Model identifier (e.g. "qwen/qwen-2.5-7b-instruct")
    * @param params.price - Price per execution in A0GI (e.g. "0.001")
+   * @param params.priceUSDC - Optional USDC.E price per execution (e.g. "0.01"); defaults to disabled
    * @param params.inputSchema - Optional JSON schema for input
    * @param params.outputSchema - Optional JSON schema for output
    */
@@ -412,6 +417,7 @@ export class SkillMintClient {
     computeProvider: string;
     model: string;
     price: string;
+    priceUSDC?: string;
     inputSchema?: Record<string, unknown>;
     outputSchema?: Record<string, unknown>;
   }): Promise<{ skillId: number; txHash: string; owner: string }> {
@@ -427,6 +433,7 @@ export class SkillMintClient {
 
     const promptHash = ethers.keccak256(ethers.toUtf8Bytes(params.systemPrompt));
     const priceWei = ethers.parseEther(params.price);
+    const priceUSDC = params.priceUSDC ? this._parseUSDC(params.priceUSDC) : 0n;
     const metadata = JSON.stringify({
       name: params.name,
       description: params.description,
@@ -443,6 +450,7 @@ export class SkillMintClient {
       params.computeProvider,
       params.model,
       priceWei,
+      priceUSDC,
       metadata
     );
     await tx.wait();
@@ -453,9 +461,11 @@ export class SkillMintClient {
 
   // ─── NFT Owner Actions ─────────────────────────────────────────────────────
 
-  /** Update the price of a skill you own */
-  async updatePrice(skillId: number, newPrice: string): Promise<string> {
-    const tx = await this.registry.updatePrice(skillId, ethers.parseEther(newPrice));
+  /** Update the dual prices of a skill you own. Omit newPriceUSDC to preserve the current USDC.E price. */
+  async updatePrice(skillId: number, newPriceA0GI: string, newPriceUSDC?: string): Promise<string> {
+    const current = newPriceUSDC === undefined ? await this.registry.getSkill(skillId) : null;
+    const priceUSDC = newPriceUSDC === undefined ? (current.priceUSDC as bigint) : this._parseUSDC(newPriceUSDC);
+    const tx = await this.registry.updatePrice(skillId, ethers.parseEther(newPriceA0GI), priceUSDC);
     await tx.wait();
     return tx.hash;
   }
@@ -737,12 +747,14 @@ export class SkillMintClient {
    *
    * @param params.bundle  Bundle bytes — Buffer/Uint8Array, or filesystem path string.
    * @param params.price   W0G charged per download.
+   * @param params.priceUSDC Optional USDC.E price per download; defaults to disabled.
    */
   async registerAgentSkill(params: {
     bundle: Buffer | Uint8Array | string;
     name: string;
     description: string;
     price: string;
+    priceUSDC?: string;
     format?: "claude-skill";
     compatibleWith?: string[];
   }): Promise<RegisterAgentSkillResult> {
@@ -797,6 +809,7 @@ export class SkillMintClient {
       AGENT_SKILL_PROVIDER,
       AGENT_SKILL_MODEL,
       ethers.parseEther(params.price),
+      params.priceUSDC ? this._parseUSDC(params.priceUSDC) : 0n,
       JSON.stringify(metadata)
     );
     await tx.wait();

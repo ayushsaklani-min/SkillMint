@@ -1,4 +1,4 @@
-// ─── SkillRegistryV2 (ERC-721 NFT) ──────────────────────────────────────────
+// ─── SkillRegistryV3 (ERC-721 NFT + dual 0G/USDC pricing) ───────────────────
 
 export const REGISTRY_ABI = [
   "function registerSkill(bytes32 promptHash, address computeProvider, string model, uint256 priceA0GI, uint256 priceUSDC, string _metadata) returns (uint256)",
@@ -31,7 +31,7 @@ export const REGISTRY_ABI = [
   "event ExecutionRecorded(uint256 indexed skillId, bytes32 receiptHash, bool success)",
 ] as const;
 
-// ─── SkillEscrowV2 (PullPayment + payee snapshot) ──────────────────────────
+// ─── SkillEscrowV3 (multi-token escrow + payee snapshot) ────────────────────
 
 export const ESCROW_ABI = [
   "function requestExecution(uint256 skillId, bytes32 inputHash) payable returns (bytes32)",

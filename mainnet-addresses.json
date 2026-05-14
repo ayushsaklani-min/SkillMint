@@ -6,9 +6,10 @@
   "storageIndexer": "https://indexer-storage-turbo.0g.ai",
   "deployer": "0xCa475D10C7eDa1678D1182c72ad750a405127845",
   "contracts": {
-    "registry": "0x14cE1f53089c414bFf75e1c462E45ecc19Bf8F09",
-    "escrow":   "0xD7385368cEf64c27fecfCC63E1E8F19fA09f8Ea5",
-    "w0g":      "0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01"
+    "registry": "0xdF28e06899955092DF81f0DBea03496D1Ac8904E",
+    "escrow":   "0xA0e5A7d722399f59A0Ee4B8DF740107FBC63f7ae",
+    "w0g":      "0x7f73A890F0F608Fa32e1dd29a5F552bC7dDa0e01",
+    "usdc":     "0x1f3aa82227281ca364bfb3d253b0f1af1da6473e"
   },
-  "deployedAt": "2026-04-27"
+  "deployedAt": "2026-05-04"
 }
