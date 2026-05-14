@@ -7,7 +7,7 @@
 ### The Verified AI Skill Execution Protocol
 
 *Every execution **TEE-attested**. Every payment **automatic**. Every result **provable**.*
-*Pay in **0G**, **W0G**, or **USDC.E** — humans on the dashboard, agents over x402.*
+*Pay in **0G**, **W0G**, or **USDC.E** — humans through dashboard escrow, agents through W0G x402.*
 
 <br/>
 
@@ -96,18 +96,19 @@ Every skill is an **ERC-721** with its prompt stored **encrypted** on 0G Storage
    - **Native 0G** → `escrow.requestExecution(skillId, input)` payable
    - **W0G** (ERC-20 dashboard) → `approve` + `escrow.requestExecutionWithToken(skillId, input, w0g, amount)`
    - **USDC.E** (ERC-20 dashboard) → `approve` + `escrow.requestExecutionWithToken(skillId, input, usdc, amount)`
-   - **W0G or USDC.E via x402** (gasless agent flow) → facilitator settles EIP-3009 `transferWithAuthorization`, then calls `escrow.requestExecutionPrefunded(...)`
-3. **Oracle** watches `ExecutionRequested(... paymentToken)`, forwards to 0G Compute TEE
+   - **W0G via x402** (agent flow) → SDK wraps native 0G into W0G if needed, signs EIP-3009 `transferWithAuthorization`, and the facilitator settles the signed payment
+3. **For escrow executions**, the oracle watches `ExecutionRequested(... paymentToken)` and forwards to 0G Compute TEE
 4. **TEE** runs the skill, returns signed output + attestation
-5. **Oracle** uploads receipt to 0G Storage with the right `paid*` field, calls `confirmExecution(executionId, root)` on-chain
-6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol — native via PullPayment, ERC-20 via push transfer
-7. **Anyone** can verify the receipt against the on-chain root — forever
+5. **For escrow executions**, the oracle uploads the receipt to 0G Storage with the right `paid*` field and calls `confirmExecution(executionId, root)` on-chain
+6. **Escrow** releases 90% to `ownerOf(skillId)`, 10% to protocol for dashboard/direct-SDK executions — native via PullPayment, ERC-20 via push transfer
+7. **For x402 executions**, the x402 server verifies payment, runs the skill, uploads the receipt to 0G Storage, and returns the receipt root plus settlement transaction to the agent
+8. **Anyone** can verify the receipt against the receipt root — escrow executions anchor it on-chain, and x402 executions return it with the settlement response
 
 ## ![AGENT SDK](https://img.shields.io/badge/📦-AGENT_SDK-D4FF00?style=for-the-badge&labelColor=000000)
 
 **`@skillmint/sdk`** — TypeScript client for agents. Two skill kinds, three payment tokens:
-- **AI skills** (prompt) — pay with native 0G, W0G, or USDC.E (humans on dashboard, agents over x402), run inside a 0G Compute TEE, verify the signed receipt.
-- **Agent skills** (folder bundles) — pay via x402 (W0G or USDC.E), download an encrypted `.skill` zip (Anthropic Claude / Codex / Cursor compatible), sha256-verify locally.
+- **AI skills** (prompt) — direct SDK/dashboard execution can pay with native 0G, W0G, or USDC.E; x402 agent execution uses W0G on the public endpoint, runs inside a 0G Compute TEE, and verifies the signed receipt.
+- **Agent skills** (folder bundles) — buy through x402, download an encrypted `.skill` zip (Anthropic Claude / Codex / Cursor compatible), and sha256-verify locally. The public x402 endpoint advertises W0G; the SDK/facilitator can also handle USDC.E when an endpoint advertises USDC.E.
 
 Defaults point at the live Vercel-proxied backend, so no URL configuration is required.
 
@@ -134,9 +135,9 @@ const r1 = await client.execute(2, "How do I deploy on 0G?", { paymentToken: Pay
 //   sends approve + requestExecutionWithToken under the hood;
 //   pays exactly skill.priceUSDC USDC.E to the escrow.
 
-// 2b. Agent execution via x402 — gasless EIP-3009, picks W0G or USDC.E based on
-//     what the facilitator advertises in /supported. Auto-wraps 0G→W0G if needed
-//     and the asset is W0G; for USDC.E you need bridged balance up front.
+// 2b. Agent execution via x402 — EIP-3009 payment authorization. The public
+//     SkillMint x402 endpoint advertises W0G. If the wallet has native 0G but
+//     not enough W0G, the SDK auto-wraps 0G -> W0G before signing.
 const result = await client.executeX402(
   2,                                                   // skillId — "0G Expert" on mainnet
   "How do I deploy a contract to 0G chain using hardhat?"
@@ -184,7 +185,7 @@ await client.registerAgentSkill({
 | Surface          | Methods |
 |------------------|---------|
 | **Discovery**    | `listSkills` · `searchSkills` · `resolveSkill` · `getSkill` (returns both prices) · `getReputation` |
-| **AI skills**    | `execute(id, input, { paymentToken })` (Native / W0G / USDC) · `executeX402` (x402 + W0G or USDC.E) · `executeAndWait` · `getExecutionOutcome` |
+| **AI skills**    | `execute(id, input, { paymentToken })` (Native / W0G / USDC) · `executeX402` (public W0G x402; SDK accepts W0G/USDC.E challenges) · `executeAndWait` · `getExecutionOutcome` |
 | **Agent skills** | `registerAgentSkill` (publish folder bundle) · `downloadAgentSkill` (buy + sha256-verify) |
 | **W0G**          | `wrapW0G` · `unwrapW0G` · `getW0GBalance` |
 | **Receipts**     | `fetchReceipt` · `verifyReceipt` (works on both kinds; pass `{ bundle }` for agent skills) |
@@ -206,11 +207,142 @@ V3 skills carry **two on-chain prices** independently — `priceA0GI` (native 0G
 
 | Token | Decimals | Path | Who pays |
 |---|---|---|---|
-| **Native 0G** | 18 | `escrow.requestExecution()` payable, settles via OpenZeppelin `PullPayment` | Humans on the dashboard |
-| **W0G** (DemoW0G with EIP-3009) | 18 | `approve` + `requestExecutionWithToken` (dashboard) **or** EIP-3009 `transferWithAuthorization` + `requestExecutionPrefunded` (x402, gasless) | Humans + agents |
-| **USDC.E** (XSwap-bridged Circle FiatToken v2) | 6 | Same two paths as W0G (dashboard or x402) | Humans + agents |
+| **Native 0G** | 18 | `escrow.requestExecution()` payable, settles via OpenZeppelin `PullPayment` | Humans on the dashboard; SDK direct execution can also use it |
+| **W0G** (DemoW0G with EIP-3009) | 18 | `approve` + `requestExecutionWithToken` for escrow execution, or EIP-3009 `transferWithAuthorization` for x402 agent execution | Humans + agents |
+| **USDC.E** (XSwap-bridged Circle FiatToken v2) | 6 | `approve` + `requestExecutionWithToken` for escrow execution; supported by SDK/facilitator when an x402 endpoint advertises it | Humans + agents |
 
-The escrow uses an `unallocatedTokenBalance[token]` mapping to bookkeep ERC-20 deposits across the dashboard `transferFrom` path and the x402 prefunded path — every settle/refund decrements this so the invariant always equals "ERC-20 balance committed to known executions."
+### SDK + W0G x402 Architecture
+
+Native 0G is the base asset of the chain, but native coins cannot sign EIP-3009 authorizations. Agent payments therefore use **W0G**, an ERC-20 wrapper around native 0G. From the agent's point of view, the payment is still 0G-denominated because `priceA0GI` is used for both native 0G and W0G at a 1:1 rate.
+
+```text
+                         PUBLISH TIME
+
+  Creator wallet
+      |
+      | registerSkill(promptHash, provider, model, priceA0GI, priceUSDC, metadata)
+      v
+  SkillRegistryV3
+      |
+      | stores:
+      | - owner/developer
+      | - prompt hash
+      | - encrypted 0G Storage root in metadata
+      | - priceA0GI  (native 0G wei, also W0G price)
+      | - priceUSDC  (6-decimal USDC.E units, 0 = disabled)
+      v
+  Skill NFT
+
+
+                         HUMAN / DASHBOARD PAYMENT
+
+  Browser wallet
+      |
+      | chooses payment asset
+      |
+      +-- Native 0G ----------------------------------------------+
+      |                                                           |
+      | escrow.requestExecution(skillId, inputHash)               |
+      | msg.value = priceA0GI                                     |
+      |                                                           v
+      |                                                     SkillEscrowV3
+      |                                                           |
+      +-- W0G / USDC.E ------------------------------------------+
+          approve(escrow, amount)
+          escrow.requestExecutionWithToken(skillId, inputHash, token, amount)
+          amount = priceA0GI for W0G
+          amount = priceUSDC for USDC.E
+
+  SkillEscrowV3
+      |
+      | emits ExecutionRequested(executionId, skillId, caller, inputHash, amount, paymentToken)
+      v
+  Oracle
+      |
+      | reads real input from /input
+      | runs skill through 0G Compute / TEE path
+      | uploads receipt to 0G Storage
+      v
+  escrow.confirmExecution(executionId, receiptRoot)
+      |
+      | Native 0G: PullPayment balances are credited
+      | W0G/USDC.E: ERC-20 push transfer
+      v
+  90% skill NFT owner / 10% protocol treasury
+
+
+                         AGENT / SDK x402 PAYMENT
+
+  Agent process using @skillmint/sdk
+      |
+      | client.executeX402(skillId, input)
+      v
+  POST /skill/:id/execute without X-PAYMENT
+      |
+      v
+  x402 skill server returns HTTP 402
+      |
+      | paymentRequirements:
+      | - asset = W0G
+      | - maxAmountRequired = priceA0GI
+      | - payTo = current skill NFT owner
+      | - resource = /skill/:id/execute
+      v
+  SDK checks agent wallet W0G balance
+      |
+      +-- enough W0G -----------------------------+
+      |                                           |
+      +-- not enough W0G                          |
+          |
+          | W0G.deposit{ value: shortfall + buffer }()
+          | wraps native 0G -> W0G
+          v
+  SDK signs EIP-3009 TransferWithAuthorization
+      |
+      | from  = agent wallet
+      | to    = skill NFT owner
+      | value = priceA0GI in W0G units
+      | nonce = random bytes32
+      v
+  POST /skill/:id/execute with X-PAYMENT header
+      |
+      v
+  x402 server
+      |
+      | asks facilitator /verify:
+      | - signature valid
+      | - nonce unused
+      | - W0G balance sufficient
+      v
+  0G Compute / TEE execution
+      |
+      | server builds receipt:
+      | - inputHash
+      | - outputHash
+      | - model/provider
+      | - teeVerified flag
+      | - paidW0G
+      v
+  Receipt uploaded to 0G Storage
+      |
+      v
+  Facilitator /settle
+      |
+      | W0G.transferWithAuthorization(agent -> skill owner)
+      v
+  SDK receives:
+      |
+      | - verified output
+      | - receiptRootHash
+      | - settlement transaction
+      | - X-PAYMENT-RESPONSE
+      v
+  Agent can verify receipt with client.fetchReceipt() + client.verifyReceipt()
+```
+
+The key distinction is that **native 0G is used directly for dashboard/direct SDK escrow execution**, while **agent x402 execution uses W0G**. If the agent wallet starts with native 0G, the SDK wraps it into W0G first, then signs the x402 payment authorization.
+
+The escrow uses an `unallocatedTokenBalance[token]` mapping to bookkeep ERC-20 deposits across token-based escrow executions. Every escrow settle/refund decrements this so the invariant always equals "ERC-20 balance committed to known executions." The V3 contract also includes a `requestExecutionPrefunded(...)` path for facilitator-style prefunded escrow accounting, while the public x402 skill endpoint currently settles W0G through EIP-3009 and returns the settlement transaction directly to the agent.
 
 **Why dual price (not USD-canonical)?** 0G mainnet is too new to have a battle-tested USD price feed. Dual-price ships zero new on-chain failure modes; publishers control margins explicitly. When Chainlink price feeds land, USD-canonical pricing becomes a one-line opt-in.
 
