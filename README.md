@@ -19,7 +19,7 @@
 
 <br/>
 
-**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[Reviewer Guide](REVIEWER.md)** · **[📜 SMP-1 Draft](https://github.com/ayushsaklani-min/SkillMint/blob/main/SMP-1-SkillMint-Verified-Skill-Standard.md)** · **[🔗 0G ChainScan](https://chainscan.0g.ai)** · **[📂 0G StorageScan](https://storagescan.0g.ai)** · https://www.youtube.com/watch?v=CE35T3lOz4Q
+**[▶ Live App](https://skillmint-0g.vercel.app)** · **[📖 Explainer](https://skillmint-0g.vercel.app/explainer)** · **[🎬 Demo Video](https://youtu.be/GOKLc4FmP5Q)** · **[🎤 Pitch Video](https://www.youtube.com/watch?v=CE35T3lOz4Q)** · **[Reviewer Guide](REVIEWER.md)** · **[📜 SMP-1 Draft](https://github.com/ayushsaklani-min/SkillMint/blob/main/SMP-1-SkillMint-Verified-Skill-Standard.md)** · **[🔗 0G ChainScan](https://chainscan.0g.ai)** · **[📂 0G StorageScan](https://storagescan.0g.ai)**
 
 </div>
 
