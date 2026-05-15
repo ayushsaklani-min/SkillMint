@@ -47,5 +47,9 @@ export const COMPUTE_MODELS = {
     'GLM-5-FP8':                   { type: 'chatbot', inputPer1M: 1.00, outputPer1M: 3.20 },
     'gpt-oss-120b':                { type: 'chatbot', inputPer1M: 0.10, outputPer1M: 0.49 },
     'qwen3-vl-30b-a3b-instruct':   { type: 'chatbot', inputPer1M: 0.49, outputPer1M: 0.49 },
+    // 0G's first-party reasoning model. TEE-verified deployment, 256K context,
+    // tool calling, thinking-enabled by default. Provider hosted by 0G Labs
+    // directly. See https://pc.0g.ai/models/0GM-1.0-35B-A3B
+    '0GM-1.0-35B-A3B':             { type: 'chatbot', inputPer1M: 0.30, outputPer1M: 1.84, cachedPer1M: 0.10, computeProvider: '0x4870CbC4D07d6Ac2EE5aA865588e5985FE77a4E9' },
   },
 };
