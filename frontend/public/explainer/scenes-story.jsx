@@ -173,7 +173,7 @@ function SceneLogo() {
         width: 440, height: 440,
         filter: `drop-shadow(12px 12px 0 ${BRAND.ink})`,
       }}>
-        <img src="assets/skillmint-logo.png" alt="SkillMint" style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>
+        <img src="/logo.png.png" alt="SkillMint" style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>
       </div>
 
       <div style={{
