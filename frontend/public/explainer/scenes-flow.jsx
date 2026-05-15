@@ -555,39 +555,39 @@ function SceneOutro() {
         }}>● LIVE ON 0G MAINNET</div>
       </div>
 
-      <div style={{ position: 'absolute', top: 170, left: 0, right: 0, textAlign: 'center',
+      <div style={{ position: 'absolute', top: 130, left: 0, right: 0, textAlign: 'center',
         opacity: v, transform: `translateY(${(1-v) * 30}px)` }}>
         <div style={{
           display: 'inline-block',
-          fontFamily: HEAVY, fontSize: 200, color: BRAND.lime,
-          WebkitTextStroke: `4px ${BRAND.ink}`,
+          fontFamily: HEAVY, fontSize: 140, color: BRAND.lime,
+          WebkitTextStroke: `3px ${BRAND.ink}`,
           letterSpacing: '-0.03em', lineHeight: 0.95,
-          textShadow: `10px 10px 0 ${BRAND.ink}`,
+          textShadow: `8px 8px 0 ${BRAND.ink}`,
         }}>AGENT</div>
       </div>
-      <div style={{ position: 'absolute', top: 380, left: 0, right: 0, textAlign: 'center',
+      <div style={{ position: 'absolute', top: 270, left: 0, right: 0, textAlign: 'center',
         opacity: a, transform: `translateY(${(1-a) * 30}px)` }}>
         <div style={{
-          fontFamily: HEAVY, fontSize: 200, color: BRAND.paper,
-          WebkitTextStroke: `4px ${BRAND.ink}`,
+          fontFamily: HEAVY, fontSize: 140, color: BRAND.paper,
+          WebkitTextStroke: `3px ${BRAND.ink}`,
           letterSpacing: '-0.03em', lineHeight: 0.95,
-          textShadow: `10px 10px 0 ${BRAND.ink}`,
+          textShadow: `8px 8px 0 ${BRAND.ink}`,
         }}>COMMERCE</div>
       </div>
-      <div style={{ position: 'absolute', top: 580, left: 0, right: 0, textAlign: 'center',
+      <div style={{ position: 'absolute', top: 410, left: 0, right: 0, textAlign: 'center',
         opacity: o, transform: `translateY(${(1-o) * 30}px)` }}>
         <div style={{
           display: 'inline-block',
-          fontFamily: HEAVY, fontSize: 200, color: BRAND.paper,
-          WebkitTextStroke: `4px ${BRAND.ink}`,
+          fontFamily: HEAVY, fontSize: 140, color: BRAND.paper,
+          WebkitTextStroke: `3px ${BRAND.ink}`,
           letterSpacing: '-0.03em', lineHeight: 0.95,
-          textShadow: `10px 10px 0 ${BRAND.ink}`,
+          textShadow: `8px 8px 0 ${BRAND.ink}`,
         }}>ON·0G</div>
       </div>
 
       {/* Live proof — concrete traction strip */}
       <div style={{
-        position: 'absolute', bottom: 340, left: 0, right: 0,
+        position: 'absolute', top: 600, left: 0, right: 0,
         display: 'flex', justifyContent: 'center', gap: 14, flexWrap: 'wrap',
         opacity: bulletsT, padding: '0 80px',
       }}>
@@ -615,10 +615,11 @@ function SceneOutro() {
         })}
       </div>
 
+      {/* Feature pills — centered, two-row friendly, padded clear of CTAs */}
       <div style={{
-        position: 'absolute', bottom: 220, left: 0, right: 0,
-        display: 'flex', justifyContent: 'center', gap: 14, flexWrap: 'wrap',
-        opacity: bulletsT, padding: '0 80px',
+        position: 'absolute', top: 760, left: 0, right: 0,
+        display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
+        opacity: bulletsT, padding: '0 360px',
       }}>
         {bullets.map((b, i) => {
           const p = clamp((t - 1.1 - i * 0.10) / 0.4, 0, 1);
@@ -626,11 +627,11 @@ function SceneOutro() {
           return (
             <div key={i} style={{
               background: BRAND.ink, color: BRAND.lime,
-              border: `3px solid ${BRAND.lime}`, borderRadius: 12,
-              padding: '10px 18px',
-              fontFamily: MONO, fontSize: 13, fontWeight: 700,
-              letterSpacing: '0.14em',
-              boxShadow: `4px 4px 0 ${BRAND.ink}`,
+              border: `2px solid ${BRAND.lime}`, borderRadius: 10,
+              padding: '8px 14px',
+              fontFamily: MONO, fontSize: 12, fontWeight: 700,
+              letterSpacing: '0.12em',
+              boxShadow: `3px 3px 0 ${BRAND.ink}`,
               transform: `translateY(${(1-e) * 20}px) scale(${e})`,
               opacity: p, whiteSpace: 'nowrap',
             }}>{b}</div>
@@ -641,45 +642,45 @@ function SceneOutro() {
       {cta > 0 && (
         <>
           <div style={{
-            position: 'absolute', left: 140, bottom: 100,
+            position: 'absolute', left: 100, bottom: 50,
             transform: `scale(${Easing.easeOutBack(cta)}) rotate(${-wobble}deg)`,
             opacity: cta,
           }}>
             <div style={{
               background: BRAND.ink, color: BRAND.paper,
-              border: `4px solid ${BRAND.lime}`, borderRadius: 18,
-              padding: '18px 26px',
-              fontFamily: MONO, fontSize: 18,
+              border: `4px solid ${BRAND.lime}`, borderRadius: 16,
+              padding: '14px 22px',
+              fontFamily: MONO, fontSize: 16,
               letterSpacing: '0.16em', fontWeight: 700,
-              boxShadow: `6px 6px 0 ${BRAND.ink}`,
-              maxWidth: 360, lineHeight: 1.5,
+              boxShadow: `5px 5px 0 ${BRAND.ink}`,
+              maxWidth: 320, lineHeight: 1.4,
             }}>
-              <div style={{ color: BRAND.lime, fontSize: 12, opacity: 0.85, marginBottom: 6 }}>$ npm i</div>
-              <div style={{ fontFamily: HEAVY, fontSize: 28, color: BRAND.lime, letterSpacing: '-0.01em' }}>
+              <div style={{ color: BRAND.lime, fontSize: 11, opacity: 0.85, marginBottom: 4 }}>$ npm i</div>
+              <div style={{ fontFamily: HEAVY, fontSize: 24, color: BRAND.lime, letterSpacing: '-0.01em' }}>
                 @skillmint/sdk
               </div>
-              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
+              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
                 5 LINES OF CODE.<br/>BOTH SIDES OF THE LOOP.
               </div>
             </div>
           </div>
 
           <div style={{
-            position: 'absolute', right: 200, bottom: 100,
+            position: 'absolute', right: 140, bottom: 50,
             transform: `scale(${Easing.easeOutBack(cta)}) rotate(${wobble}deg)`,
             opacity: cta,
           }}>
             <div style={{
-              width: 220, height: 220, borderRadius: '50%',
+              width: 170, height: 170, borderRadius: '50%',
               background: BRAND.lime,
               border: `4px solid ${BRAND.ink}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: HEAVY, fontSize: 50, color: BRAND.ink,
-              boxShadow: `8px 8px 0 ${BRAND.ink}`,
+              fontFamily: HEAVY, fontSize: 42, color: BRAND.ink,
+              boxShadow: `6px 6px 0 ${BRAND.ink}`,
               position: 'relative',
             }}>
               <div style={{ transform: 'translate(2px, -4px)' }}>↗</div>
-              <svg width="220" height="220" style={{
+              <svg width="170" height="170" style={{
                 position: 'absolute', inset: 0,
                 animation: 'spin 10s linear infinite',
               }} viewBox="0 0 220 220">
