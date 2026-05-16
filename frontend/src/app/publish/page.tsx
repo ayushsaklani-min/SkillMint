@@ -21,14 +21,15 @@ const stepsForKind = (k: Kind) => [
 
 // Live TEE-attested mainnet models (0G Aristotle). Each pairs with the EXACT
 // broker provider that serves it — picking the wrong provider for a model
-// makes the oracle's broker call fail and the contract auto-refunds. Cheapest
-// model on top so the default publish stays gas-cheap.
+// makes the oracle's broker call fail and the contract auto-refunds. 0G's
+// first-party reasoning model is on top — it's the default for new skills.
 const MODELS = [
-  { value: "qwen/qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B",  network: "Mainnet", provider: "0x4415ef5CBb415347bb18493af7cE01f225Fc0868" },
-  { value: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek v3",   network: "Mainnet", provider: "0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0" },
-  { value: "zai-org/GLM-5-FP8",              label: "GLM-5 FP8",     network: "Mainnet", provider: "0xd9966e13a6026Fcca4b13E7ff95c94DE268C471C" },
-  { value: "zai-org/GLM-5.1-FP8",            label: "GLM-5.1 FP8",   network: "Mainnet", provider: "0x7DCFe6AEa70350C2090041524c9B4A9262DCe87D" },
-  { value: "openai/gpt-5.4-mini",            label: "GPT-5.4 Mini",  network: "Mainnet", provider: "0x25F8f01cA76060ea40895472b1b79f76613Ca497" },
+  { value: "0GM-1.0-35B-A3B",                label: "0GM 1.0 35B (0G)", network: "Mainnet", provider: "0x4870CbC4D07d6Ac2EE5aA865588e5985FE77a4E9" },
+  { value: "qwen/qwen3-vl-30b-a3b-instruct", label: "Qwen3 VL 30B",     network: "Mainnet", provider: "0x4415ef5CBb415347bb18493af7cE01f225Fc0868" },
+  { value: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek v3",      network: "Mainnet", provider: "0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0" },
+  { value: "zai-org/GLM-5-FP8",              label: "GLM-5 FP8",        network: "Mainnet", provider: "0xd9966e13a6026Fcca4b13E7ff95c94DE268C471C" },
+  { value: "zai-org/GLM-5.1-FP8",            label: "GLM-5.1 FP8",      network: "Mainnet", provider: "0x7DCFe6AEa70350C2090041524c9B4A9262DCe87D" },
+  { value: "openai/gpt-5.4-mini",            label: "GPT-5.4 Mini",     network: "Mainnet", provider: "0x25F8f01cA76060ea40895472b1b79f76613Ca497" },
 ];
 const DEFAULT_MODEL = MODELS[0];
 
@@ -176,6 +177,11 @@ export default function PublishPage() {
   }
 
   async function publishAgent() {
+    // Agent Skill publishing is temporarily paused while the oracle's bundle
+    // upload path is being hardened. Re-enable by removing this guard once the
+    // /encrypt-bundle endpoint is reliable end-to-end.
+    throw new Error("Agent Skill publishing is temporarily paused. Please publish an AI Skill instead.");
+    // eslint-disable-next-line no-unreachable
     if (!bundleFile) throw new Error("pick a .skill or .zip bundle first");
     const { signer, address } = await ensureWalletReady();
 
@@ -267,13 +273,16 @@ export default function PublishPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setKind("agent-skill"); setStep(1); }}
-                className={`text-left p-4 rounded-2xl border-2 border-black btn-brutal ${
-                  kind === "agent-skill" ? "bg-[#D4FF00] text-black shadow-brutal" : "bg-white text-black shadow-brutal-sm"
-                }`}
+                disabled
+                aria-disabled="true"
+                title="Agent Skill publishing is temporarily paused"
+                className="text-left p-4 rounded-2xl border-2 border-black/40 bg-[#FAFAFA] text-black/40 cursor-not-allowed relative overflow-hidden"
               >
                 <div className="font-display text-base leading-tight">📦 AGENT SKILL</div>
-                <div className="font-mono text-[10px] tracking-widest mt-1 text-black/70">FOLDER · CLAUDE / CODEX</div>
+                <div className="font-mono text-[10px] tracking-widest mt-1">FOLDER · CLAUDE / CODEX</div>
+                <div className="absolute top-2 right-2 bg-black text-[#D4FF00] font-mono text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-full">
+                  PAUSED
+                </div>
               </button>
             </motion.div>
 
