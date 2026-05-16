@@ -178,49 +178,8 @@ export default function PublishPage() {
 
   async function publishAgent() {
     // Agent Skill publishing is temporarily paused while the oracle's bundle
-    // upload path is being hardened. Re-enable by removing this guard once the
-    // /encrypt-bundle endpoint is reliable end-to-end.
+    // upload path is being hardened. Restore by reverting commit 6d7c8a1.
     throw new Error("Agent Skill publishing is temporarily paused. Please publish an AI Skill instead.");
-    // eslint-disable-next-line no-unreachable
-    if (!bundleFile) throw new Error("pick a .skill or .zip bundle first");
-    const { signer, address } = await ensureWalletReady();
-
-    // 1. Encrypt + upload via oracle (multipart)
-    const form = new FormData();
-    form.append("bundle", bundleFile, bundleFile.name);
-    form.append("name", name);
-    const encRes = await fetch("/api/oracle/encrypt-bundle", { method: "POST", body: form });
-    if (!encRes.ok) {
-      const errText = await encRes.text().catch(() => "");
-      throw new Error(`Bundle encryption failed: ${encRes.status} ${errText}`);
-    }
-    const enc = await encRes.json() as {
-      storageRoot: string; iv: string; algo: "aes-256-gcm"; keyId: string;
-      sha256: string; manifest: string[]; sizeBytes: number;
-    };
-
-    // 2. Mint NFT — promptHash = bundleSha256 (the cryptographic prompt-equivalent)
-    const registry = new ethers.Contract(NETWORK.registry, REGISTRY_ABI, signer);
-    const priceA0GI = ethers.parseEther(priceA0GIStr || price);
-    const priceUSDC = usdcDisabled ? BigInt(0) : ethers.parseUnits(priceUSDStr || "0", 6);
-    const metadata = JSON.stringify({
-      kind: "agent-skill",
-      name,
-      description,
-      bundleStorageRoot: enc.storageRoot,
-      bundleIv: enc.iv,
-      bundleAlgo: enc.algo,
-      keyId: enc.keyId,
-      bundleSha256: enc.sha256,
-      sizeBytes: enc.sizeBytes,
-      manifest: enc.manifest,
-      format: "claude-skill",
-      compatibleWith: compat,
-    });
-    const tx = await registry.registerSkill(enc.sha256, AGENT_SKILL_PROVIDER, AGENT_SKILL_MODEL, priceA0GI, priceUSDC, metadata);
-    await tx.wait();
-    const skillCount = await registry.skillCount();
-    setResult({ skillId: skillCount.toString(), txHash: tx.hash, nftOwner: address, kind: "agent-skill" });
   }
 
   const canNext = () => {
