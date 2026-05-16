@@ -422,7 +422,7 @@ function ExecuteContent() {
                         </a>
                       )}
                       {bundleResult.receiptRoot && (
-                        <a href={`${NETWORK.storageScan}/file/${bundleResult.receiptRoot}`} target="_blank" rel="noopener noreferrer" className="bg-white text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
+                        <a href={`${NETWORK.storageIndexer}/file?root=${bundleResult.receiptRoot}`} target="_blank" rel="noopener noreferrer" className="bg-white text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
                           RECEIPT →
                         </a>
                       )}
@@ -662,7 +662,7 @@ function ExecuteContent() {
                   <DetailRow label="Revenue To" value={exec.payee} mono />
                   <DetailRow label="Execution ID" value={exec.executionId} mono />
                   <DetailRow label="Payment TX" value={exec.txHash} mono link={`${NETWORK.chainScan}/tx/${exec.txHash}`} />
-                  {exec.receiptHash && <DetailRow label="Receipt Hash" value={exec.receiptHash} mono link={`${NETWORK.storageScan}/file/${exec.receiptHash}`} />}
+                  {exec.receiptHash && <DetailRow label="Receipt Hash" value={exec.receiptHash} mono link={`${NETWORK.storageIndexer}/file?root=${exec.receiptHash}`} />}
                   {typeof receiptData?.chatID === "string" && <DetailRow label="TEE Chat ID" value={receiptData.chatID} mono />}
                 </div>
               </div>
@@ -682,9 +682,9 @@ function ExecuteContent() {
                   </button>
                 </a>
                 {exec.receiptHash && (
-                  <a href={`${NETWORK.storageScan}/file/${exec.receiptHash}`} target="_blank" rel="noopener noreferrer">
+                  <a href={`${NETWORK.storageIndexer}/file?root=${exec.receiptHash}`} target="_blank" rel="noopener noreferrer">
                     <button className="bg-white text-black font-display text-sm px-5 py-2.5 border-2 border-black rounded-full shadow-brutal-sm btn-brutal">
-                      STORAGESCAN →
+                      RECEIPT JSON →
                     </button>
                   </a>
                 )}

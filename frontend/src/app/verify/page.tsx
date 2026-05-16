@@ -370,9 +370,9 @@ function VerifyContent() {
 
               {/* Links */}
               <div className="flex flex-wrap gap-3">
-                <a href={`${NETWORK.storageScan}/file/${receiptHash.trim()}`} target="_blank" rel="noopener noreferrer">
+                <a href={`${NETWORK.storageIndexer}/file?root=${receiptHash.trim()}`} target="_blank" rel="noopener noreferrer">
                   <button className="bg-white text-black font-display text-sm px-5 py-2.5 border-2 border-black rounded-full shadow-brutal-sm btn-brutal">
-                    STORAGESCAN →
+                    RECEIPT JSON →
                   </button>
                 </a>
                 <a href={`${NETWORK.chainScan}/address/${NETWORK.escrow}`} target="_blank" rel="noopener noreferrer">

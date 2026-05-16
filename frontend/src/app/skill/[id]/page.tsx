@@ -362,7 +362,7 @@ export default function SkillPage() {
                       </a>
                     )}
                     {buyResult.receiptRoot && (
-                      <a href={`${NETWORK.storageScan}/file/${buyResult.receiptRoot}`} target="_blank" rel="noopener noreferrer" className="inline-block ml-2 bg-white text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
+                      <a href={`${NETWORK.storageIndexer}/file?root=${buyResult.receiptRoot}`} target="_blank" rel="noopener noreferrer" className="inline-block ml-2 bg-white text-black font-display text-xs px-3 py-1.5 border-2 border-black rounded-full">
                         RECEIPT →
                       </a>
                     )}
